@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ESP32 Pong Controller</title>
+  <style>
+    body { 
+      text-align: center; 
+      font-family: sans-serif; 
+      margin-top: 160px;
+      touch-action: manipulation;
+    }
+    button { 
+      font-size: 96px; 
+      padding: 80px; 
+      margin: 40px;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .start-btn { background-color: #4CAF50; color: white; }
+    .control-btn { background-color: #008CBA; color: white; }
+  </style>
+</head>
+<body>
+  <h2>ESP32 Pong Controller</h2>
+  
+  <button class="start-btn" onclick="startGame()">START GAME</button><br><br>
+  
+  <button class="control-btn" onclick="send('left')">Up</button><br>
+  <button class="control-btn" onclick="send('right')">Down</button>
+
+  <script>
+    let socket = new WebSocket("ws://" + location.hostname + ":81/");
+    socket.onopen = () => console.log("Connected to ESP32 WebSocket");
+    socket.onclose = () => console.log("Disconnected");
+
+    function send(dir) {
+      socket.send(JSON.stringify({ action: "move", dir: dir }));
+    }
+
+    function startGame() {
+      fetch('/start')
+        .then(response => response.text())
+        .then(data => {
+          console.log(data);
+        })
+        .catch(error => {
+          console.error('Error starting game:', error);
+          alert("Failed to start game");
+        });
+    }
+  </script>
+</body>
+</html>
