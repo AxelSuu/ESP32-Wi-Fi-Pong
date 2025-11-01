@@ -3,9 +3,9 @@ Full wireless architecture combining ESP32 Access Point mode with web server + r
 
 <table>
   <tr>
-    <td><img src="bild3.png"/></td>
-    <td><img src="Esp32_S3.png"/></td>
-    <td><img src="Websocket_controller.png"/></td>
+    <td><img src="bild3.jpeg"/ style="width:120px;"></td>
+    <td><img src="Esp32_S3.png"/ style="width:120px;"></td>
+    <td><img src="Websocket_controller.png"/ style="width:120px;"></td>
   </tr>
 </table>
 
