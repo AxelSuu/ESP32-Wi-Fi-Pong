@@ -9,6 +9,8 @@ Full wireless architecture combining ESP32 Access Point mode with web server + r
   </tr>
 </table>
 
+Check if esp32-s3 is on port COM3, otherwise change in platformio.ini
+
 Microcontroller:
 - ESP32-S3-DevKitC, 8 MB Flash, 8 MB PSRAM
 
