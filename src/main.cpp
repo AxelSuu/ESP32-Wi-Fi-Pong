@@ -13,6 +13,7 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 96
 
+
 // ---------------- Pin definitions -----------------
 #define OLED_CS    6
 #define OLED_DC    5
@@ -20,10 +21,12 @@
 #define OLED_MOSI  11
 #define OLED_SCLK  12
 
-// ------------------- Using SPI  --------------------
+
+// ------------------- Display with SPI com ----------
 Adafruit_SSD1327 display(SCREEN_WIDTH, SCREEN_HEIGHT,
                          OLED_MOSI, OLED_SCLK,
                          OLED_DC, OLED_RST, OLED_CS);
+
 
 // ------------------- WIFI + SERVER -----------------
 const char* ssid = "ESP32-Pong";
@@ -32,14 +35,17 @@ const char* password = "12345678";
 WebServer server(80);
 WebSocketsServer webSocket(81);
 
+
 // ------------------- GAME STATE --------------------
-enum GameState {
+enum GameState
+{
   WAITING_FOR_START,
   PLAYING,
   GAME_OVER
 };
 
 GameState currentState = WAITING_FOR_START;
+
 
 // ------------------- GAME OBJECTS -------------------
 struct Paddle { int x, y, w, h; };
@@ -57,17 +63,20 @@ int aiTargetOffset = 0;
 unsigned long lastAiUpdate = 0;
 unsigned long gameStartTime = 0;
 unsigned long lastSpeedIncrease = 0;
-const unsigned long SPEED_INCREASE_INTERVAL = 10000; // 10 seconds in milliseconds
+const unsigned long SPEED_INCREASE_INTERVAL = 10000; // 10 seconds in 10000 milliseconds
+
 
 // ------------------- GAME FUNCTIONS -------------------
-void resetBall() {
+void resetBall()
+{
   ball.x = SCREEN_WIDTH / 2;
   ball.y = SCREEN_HEIGHT / 2;
   ball.dx = 4;
   ball.dy = (random(2) == 0) ? 1 : -1;
 }
 
-void startGame() {
+void startGame()
+{
   currentState = PLAYING;
   playerScore = 0;
   enemyScore = 0;
@@ -82,7 +91,8 @@ void startGame() {
   lastSpeedIncrease = gameStartTime;
 }
 
-void drawStartScreen() {
+void drawStartScreen()
+{
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1327_WHITE);
@@ -96,7 +106,6 @@ void drawStartScreen() {
   display.println("Connect to WiFi:");
   display.setCursor(15, 42);
   display.println("ESP32-Pong");
-  
   display.setCursor(10, 58);
   display.println("Open browser and");
   display.setCursor(10, 70);
@@ -109,16 +118,21 @@ void drawStartScreen() {
   display.display();
 }
 
-void updateGame() {
+void updateGame()
+{
   if (currentState != PLAYING) return;
 
   // Check for ball speed increase every 10 seconds
   unsigned long currentTime = millis();
-  if (currentTime - lastSpeedIncrease >= SPEED_INCREASE_INTERVAL) {
+  if (currentTime - lastSpeedIncrease >= SPEED_INCREASE_INTERVAL)
+  {
     // Increase ball speed (preserve direction)
-    if (ball.dx > 0) {
+    if (ball.dx > 0)
+    {
       ball.dx += 1;
-    } else {
+    }
+    else
+    {
       ball.dx -= 1;
     }
     lastSpeedIncrease = currentTime;
@@ -129,31 +143,37 @@ void updateGame() {
   ball.y += ball.dy;
 
   // Ball collision with top/bottom walls
-  if (ball.y - ball.r <= 0 || ball.y + ball.r >= SCREEN_HEIGHT) {
+  if (ball.y - ball.r <= 0 || ball.y + ball.r >= SCREEN_HEIGHT)
+  {
     ball.dy *= -1;
   }
 
   // Ball collision with player paddle
   if (ball.x - ball.r <= player.x + player.w &&
       ball.y >= player.y && ball.y <= player.y + player.h &&
-      ball.dx < 0) {
+      ball.dx < 0)
+  {
     ball.dx *= -1;
   }
 
   // Ball collision with enemy paddle
   if (ball.x + ball.r >= enemy.x &&
       ball.y >= enemy.y && ball.y <= enemy.y + enemy.h &&
-      ball.dx > 0) {
+      ball.dx > 0)
+  {
     ball.dx *= -1;
   }
 
   // Check for scoring (ball out of bounds)
-  if (ball.x < 0) {
+  if (ball.x < 0)
+  {
     enemyScore++;
     resetBall();
     // Reset speed increase timer when ball resets
     lastSpeedIncrease = millis();
-  } else if (ball.x > SCREEN_WIDTH) {
+  }
+  else if (ball.x > SCREEN_WIDTH)
+  {
     playerScore++;
     resetBall();
     // Reset speed increase timer when ball resets
@@ -163,31 +183,41 @@ void updateGame() {
   // Imperfect enemy AI with reaction delay and targeting errors
   
   // Update AI decision every 250-500ms (random delay)
-  if (currentTime - lastAiUpdate > aiReactionDelay) {
+  if (currentTime - lastAiUpdate > aiReactionDelay)
+  {
     lastAiUpdate = currentTime;
-    aiReactionDelay = random(250, 500); // Random reaction time
+    // Random reaction time
+    aiReactionDelay = random(250, 500);
     
-    // Add random offset to target (overshooting/undershooting)
-    aiTargetOffset = random(-10, 10); // Random offset between -8 and 8 pixels
+    // Random offset to target between -8 and 8 pixels
+    aiTargetOffset = random(-10, 10);
   }
   
   // Only react if ball is moving toward enemy
-  if (ball.dx > 0) {
+  if (ball.dx > 0)
+  {
     int enemyCenter = enemy.y + enemy.h / 2;
-    int targetY = ball.y + aiTargetOffset; // Target with error
+    // Target with error
+    int targetY = ball.y + aiTargetOffset;
     
     // Move toward target with some randomness
-    int moveSpeed = 2; // Variable speed 1-3 pixels
+    // Variable speed 1-3 pixels
+    int moveSpeed = 2;
     
-    if (targetY < enemyCenter - 3) {
-      enemy.y -= moveSpeed; // Move up
-    } else if (targetY > enemyCenter + 3) {
-      enemy.y += moveSpeed; // Move down
+    if (targetY < enemyCenter - 3)
+    {
+      // Move up
+      enemy.y -= moveSpeed;
+    }
+    else if (targetY > enemyCenter + 3)
+    {
+      // Move down
+      enemy.y += moveSpeed;
     }
     
-    // Occasionally make a mistake (10% chance)
+    // Occasionally enemy makes a mistake
     if (random(100) < 10) {
-      enemy.y += random(-6, 6); // Random movement
+      enemy.y += random(-6, 6);
     }
   }
 
@@ -230,27 +260,36 @@ void drawGame() {
   display.display();
 }
 
+
 // ------------------- WEBSOCKET HANDLER -------------------
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-  if (type == WStype_TEXT && currentState == PLAYING) {
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length)
+{
+  if (type == WStype_TEXT && currentState == PLAYING)
+  {
     String msg = String((char*)payload);
-    if (msg.indexOf("left") >= 0) player.y -= 10;  // move up
-    if (msg.indexOf("right") >= 0) player.y += 10; // move down
+    // move up
+    if (msg.indexOf("left") >= 0) player.y -= 10;
+    // move down
+    if (msg.indexOf("right") >= 0) player.y += 10;
   }
 }
+
 
 // ------------------- SETUP -------------------
 void setup() {
   Serial.begin(115200);
 
   // Init SPIFFS
-  if (!SPIFFS.begin(true)) {
+  if (!SPIFFS.begin(true))
+  {
     Serial.println("SPIFFS mount failed");
     return;
   }
 
   // OLED init
-  if (!display.begin(0x3D)) {  // Address param ignored in SPI mode
+  if (!display.begin(0x3D))
+  {
+    // Address param ignored in SPI mode
     Serial.println("SSD1327 allocation failed");
     for (;;);
   }
@@ -263,9 +302,11 @@ void setup() {
   Serial.println("WiFi started: ESP32-Pong");
 
   // Serve index.html from SPIFFS
-  server.on("/", HTTP_GET, []() {
+  server.on("/", HTTP_GET, []()
+  {
     File file = SPIFFS.open("/index.html", "r");
-    if (!file) {
+    if (!file)
+    {
       server.send(500, "text/plain", "index.html not found");
       return;
     }
@@ -273,8 +314,9 @@ void setup() {
     file.close();
   });
   
-  // Handle start game request
-  server.on("/start", HTTP_GET, []() {
+  // Handle start game http request
+  server.on("/start", HTTP_GET, []()
+  {
     startGame();
     server.send(200, "text/plain", "Game Started!");
   });
@@ -286,8 +328,10 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
 }
 
+
 // ------------------- LOOP -------------------
-void loop() {
+void loop()
+{
   server.handleClient();
   webSocket.loop();
 
