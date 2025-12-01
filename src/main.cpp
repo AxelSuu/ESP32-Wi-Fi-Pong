@@ -13,6 +13,20 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 96
 
+// ------------------- GAME CONSTANTS -------------------
+const int PADDLE_SPEED = 10;
+const int PADDLE_WIDTH = 4;
+const int PADDLE_HEIGHT = 20;
+const int BALL_RADIUS = 3;
+const int BALL_INITIAL_SPEED_X = 4;
+const int BALL_INITIAL_SPEED_Y = 1;
+const int WIN_SCORE = 3;
+const int AI_MIN_REACTION_DELAY = 250;
+const int AI_MAX_REACTION_DELAY = 500;
+const int AI_TARGET_OFFSET_RANGE = 10;
+const int AI_MOVE_SPEED = 2;
+const int AI_MISTAKE_CHANCE = 10;  // percentage
+
 
 // ---------------- Pin definitions -----------------
 #define OLED_CS    6
@@ -51,9 +65,9 @@ GameState currentState = WAITING_FOR_START;
 struct Paddle { int x, y, w, h; };
 struct Ball { int x, y, dx, dy, r; };
 
-Paddle player = {5, 30, 4, 20};
-Paddle enemy  = {SCREEN_WIDTH - 9, 30, 4, 20};
-Ball ball     = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 2, 1, 3};
+Paddle player = {5, 30, PADDLE_WIDTH, PADDLE_HEIGHT};
+Paddle enemy  = {SCREEN_WIDTH - 9, 30, PADDLE_WIDTH, PADDLE_HEIGHT};
+Ball ball     = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, BALL_INITIAL_SPEED_X, BALL_INITIAL_SPEED_Y, BALL_RADIUS};
 
 
 int playerScore = 0;
@@ -71,8 +85,8 @@ void resetBall()
 {
   ball.x = SCREEN_WIDTH / 2;
   ball.y = SCREEN_HEIGHT / 2;
-  ball.dx = 4;
-  ball.dy = (random(2) == 0) ? 1 : -1;
+  ball.dx = BALL_INITIAL_SPEED_X;
+  ball.dy = (random(2) == 0) ? BALL_INITIAL_SPEED_Y : -BALL_INITIAL_SPEED_Y;
 }
 
 void startGame()
@@ -168,6 +182,11 @@ void updateGame()
   if (ball.x < 0)
   {
     enemyScore++;
+    if (enemyScore >= WIN_SCORE)
+    {
+      currentState = GAME_OVER;
+      return;
+    }
     resetBall();
     // Reset speed increase timer when ball resets
     lastSpeedIncrease = millis();
@@ -175,6 +194,11 @@ void updateGame()
   else if (ball.x > SCREEN_WIDTH)
   {
     playerScore++;
+    if (playerScore >= WIN_SCORE)
+    {
+      currentState = GAME_OVER;
+      return;
+    }
     resetBall();
     // Reset speed increase timer when ball resets
     lastSpeedIncrease = millis();
@@ -187,10 +211,10 @@ void updateGame()
   {
     lastAiUpdate = currentTime;
     // Random reaction time
-    aiReactionDelay = random(250, 500);
+    aiReactionDelay = random(AI_MIN_REACTION_DELAY, AI_MAX_REACTION_DELAY);
     
-    // Random offset to target between -8 and 8 pixels
-    aiTargetOffset = random(-10, 10);
+    // Random offset to target
+    aiTargetOffset = random(-AI_TARGET_OFFSET_RANGE, AI_TARGET_OFFSET_RANGE);
   }
   
   // Only react if ball is moving toward enemy
@@ -201,22 +225,20 @@ void updateGame()
     int targetY = ball.y + aiTargetOffset;
     
     // Move toward target with some randomness
-    // Variable speed 1-3 pixels
-    int moveSpeed = 2;
-    
     if (targetY < enemyCenter - 3)
     {
       // Move up
-      enemy.y -= moveSpeed;
+      enemy.y -= AI_MOVE_SPEED;
     }
     else if (targetY > enemyCenter + 3)
     {
       // Move down
-      enemy.y += moveSpeed;
+      enemy.y += AI_MOVE_SPEED;
     }
     
     // Occasionally enemy makes a mistake
-    if (random(100) < 10) {
+    if (random(100) < AI_MISTAKE_CHANCE)
+    {
       enemy.y += random(-6, 6);
     }
   }
@@ -230,9 +252,50 @@ void updateGame()
   if (player.y + player.h > SCREEN_HEIGHT) player.y = SCREEN_HEIGHT - player.h;
 }
 
+void drawGameOverScreen()
+{
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1327_WHITE);
+  
+  // Title
+  display.setCursor(25, 10);
+  display.println("GAME OVER!");
+  
+  // Winner announcement
+  display.setCursor(30, 30);
+  if (playerScore >= WIN_SCORE)
+  {
+    display.println("YOU WIN!");
+  }
+  else
+  {
+    display.println("AI WINS!");
+  }
+  
+  // Final score
+  display.setCursor(20, 50);
+  display.printf("Score: %d - %d", playerScore, enemyScore);
+  
+  // Restart instruction
+  display.setCursor(5, 75);
+  display.println("Press START to");
+  display.setCursor(5, 85);
+  display.println("play again");
+  
+  display.display();
+}
+
 void drawGame() {
-  if (currentState == WAITING_FOR_START) {
+  if (currentState == WAITING_FOR_START)
+  {
     drawStartScreen();
+    return;
+  }
+  
+  if (currentState == GAME_OVER)
+  {
+    drawGameOverScreen();
     return;
   }
   
@@ -268,9 +331,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
   {
     String msg = String((char*)payload);
     // move up
-    if (msg.indexOf("left") >= 0) player.y -= 10;
+    if (msg.indexOf("up") >= 0) player.y -= PADDLE_SPEED;
     // move down
-    if (msg.indexOf("right") >= 0) player.y += 10;
+    if (msg.indexOf("down") >= 0) player.y += PADDLE_SPEED;
   }
 }
 
