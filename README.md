@@ -34,21 +34,12 @@ Full wireless architecture combining ESP32 Access Point mode with web server + r
   </tr>
 </table>
 
-## How to Play
-
-1. Connect to Wi-Fi network: **ESP32-Pong** (password: `12345678`)
-2. Open browser and go to `192.168.4.1`
-3. Press **START GAME** to begin
-4. Use **Up** / **Down** buttons to control your paddle
-5. First to 3 points wins
-
 ## Setup Instructions
 
-1. Install [PlatformIO](https://platformio.org/install)
-2. Clone this repository
-3. Check if ESP32-S3 is on port COM3, otherwise change in `platformio.ini`
-4. Build and upload firmware: `pio run -t upload`
-5. Upload web files to SPIFFS: `pio run -t uploadfs`
+1. Clone this repository
+2. Check if ESP32-S3 is on port COM3, otherwise change in `platformio.ini`
+3. Build and upload firmware: `pio run -t upload`
+4. Upload data files to SPIFFS: `pio run -t uploadfs`
 
 ## Library Dependencies
 
