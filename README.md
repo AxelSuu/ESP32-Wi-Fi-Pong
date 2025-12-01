@@ -1,11 +1,19 @@
+## Esp32 wifi pong
+
 Embedded wireless pong with SPI, Wi-Fi communication and OLED peripheral in C++.
 Full wireless architecture combining ESP32 Access Point mode with web server + real time WebSocket controller.
 
 <table>
   <tr>
-    <td><img src="bild3.jpeg"/ style="width:120px;"></td>
-    <td><img src="Esp32_S3.png"/ style="width:120px;"></td>
-    <td><img src="Websocket_controller.png"/ style="width:120px;"></td>
+    <td><img src="pic1.jpeg"></td>
+    <td><img src="pic2.jpeg"></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td><img src="wifi.png"></td>
+    <td><img src="Websocket_controller.png"></td>
   </tr>
 </table>
 
