@@ -23,26 +23,76 @@
       -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
       box-sizing: border-box;
+      transition: transform 0.1s, opacity 0.1s;
+    }
+    button:active {
+      transform: scale(0.95);
+      opacity: 0.8;
     }
     .start-btn { background-color: #4CAF50; color: white; }
     .control-btn { background-color: #008CBA; color: white; }
+    #status {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 20px;
+    }
+    .connected { color: #4CAF50 !important; }
+    .disconnected { color: #f44336 !important; }
   </style>
 </head>
 <body>
   <h2>ESP32 Pong Controller</h2>
+  <div id="status" class="disconnected">Connecting...</div>
   
   <button class="start-btn" onclick="startGame()">START GAME</button><br><br>
   
-  <button class="control-btn" onclick="send('left')">Up</button><br>
-  <button class="control-btn" onclick="send('right')">Down</button>
+  <button class="control-btn" onclick="send('up')">Up</button><br>
+  <button class="control-btn" onclick="send('down')">Down</button>
 
   <script>
-    let socket = new WebSocket("ws://" + location.hostname + ":81/");
-    socket.onopen = () => console.log("Connected to ESP32 WebSocket");
-    socket.onclose = () => console.log("Disconnected");
+    let socket;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    const statusEl = document.getElementById('status');
+
+    function connect() {
+      socket = new WebSocket("ws://" + location.hostname + ":81/");
+      
+      socket.onopen = () => {
+        console.log("Connected to ESP32 WebSocket");
+        statusEl.textContent = "Connected";
+        statusEl.className = "connected";
+        reconnectAttempts = 0;
+      };
+      
+      socket.onclose = () => {
+        console.log("Disconnected");
+        statusEl.textContent = "Disconnected - Reconnecting...";
+        statusEl.className = "disconnected";
+        
+        // Attempt to reconnect with exponential backoff
+        if (reconnectAttempts < maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+          reconnectAttempts++;
+          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+          setTimeout(connect, delay);
+        } else {
+          statusEl.textContent = "Connection failed - Refresh page";
+        }
+      };
+      
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+    }
+
+    // Initial connection
+    connect();
 
     function send(dir) {
-      socket.send(JSON.stringify({ action: "move", dir: dir }));
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "move", dir: dir }));
+      }
     }
 
     function startGame() {
