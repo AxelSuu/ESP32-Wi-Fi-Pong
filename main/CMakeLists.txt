@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c" "game.c" "display.c" "network.c"
+    SRCS "main.c" "engine.c" "pong.c" "snake.c" "racer.c" "tron.c" "display.c" "network.c"
     INCLUDE_DIRS "."
     PRIV_REQUIRES
         esp_http_server esp_wifi nvs_flash spiffs

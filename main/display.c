@@ -1,6 +1,5 @@
 #include "display.h"
-#include "game.h"
-#include "config.h"
+#include "hw_config.h"
 #include <string.h>
 #include <stdio.h>
 #include "driver/spi_master.h"
@@ -143,7 +142,7 @@ static void ssd1327_data_buf(const uint8_t *data, size_t len)
 // --- Framebuffer pixel write ---
 // SSD1327 pixel layout: byte[x/2 + y*64], x-even→high nibble, x-odd→low nibble
 
-static inline void set_pixel(int x, int y, uint8_t nibble)
+void gfx_pixel(int x, int y, uint8_t nibble)
 {
     if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
     int idx = y * 64 + x / 2;
@@ -155,29 +154,29 @@ static inline void set_pixel(int x, int y, uint8_t nibble)
     }
 }
 
-static void fill_screen(uint8_t nibble)
+void gfx_clear(uint8_t nibble)
 {
     uint8_t b = ((nibble & 0x0F) << 4) | (nibble & 0x0F);
     memset(s_framebuf, b, FRAMEBUF_SIZE);
 }
 
-static void draw_rect_filled(int x, int y, int w, int h, uint8_t color)
+void gfx_rect(int x, int y, int w, int h, uint8_t color)
 {
     for (int row = y; row < y + h; row++) {
         for (int col = x; col < x + w; col++) {
-            set_pixel(col, row, color);
+            gfx_pixel(col, row, color);
         }
     }
 }
 
-static void draw_circle_filled(int cx, int cy, int r, uint8_t color)
+void gfx_circle(int cx, int cy, int r, uint8_t color)
 {
     for (int dy = -r; dy <= r; dy++) {
         int dx = 0;
         while (dx * dx + dy * dy <= r * r) dx++;
         dx--;
         for (int x = cx - dx; x <= cx + dx; x++) {
-            set_pixel(x, cy + dy, color);
+            gfx_pixel(x, cy + dy, color);
         }
     }
 }
@@ -190,13 +189,13 @@ static void draw_char(int x, int y, char c, uint8_t color)
         uint8_t line = glyph[col];
         for (int row = 0; row < 7; row++) {
             if (line & (1 << row)) {
-                set_pixel(x + col, y + row, color);
+                gfx_pixel(x + col, y + row, color);
             }
         }
     }
 }
 
-static void draw_string(int x, int y, const char *str, uint8_t color)
+void gfx_text(int x, int y, const char *str, uint8_t color)
 {
     while (*str) {
         draw_char(x, y, *str++, color);
@@ -205,7 +204,7 @@ static void draw_string(int x, int y, const char *str, uint8_t color)
     }
 }
 
-static void display_flush(void)
+void display_present(void)
 {
     // Set column address 0–63 (128 pixels / 2 per byte)
     ssd1327_cmd(0x15);
@@ -217,62 +216,6 @@ static void display_flush(void)
     ssd1327_cmd(0x5F);
     // Send framebuffer
     ssd1327_data_buf(s_framebuf, FRAMEBUF_SIZE);
-}
-
-// --- Screen drawing ---
-
-static void draw_start_screen(void)
-{
-    fill_screen(0x0);
-    draw_string(25, 10, "ESP32 PONG", 0xF);
-    draw_string(10, 30, "Connect to WiFi:", 0xF);
-    draw_string(15, 42, "ESP32-Pong", 0xF);
-    draw_string(10, 58, "Open browser and", 0xF);
-    draw_string(10, 70, "click START GAME", 0xF);
-    draw_string( 5, 85, "IP: 192.168.4.1", 0xF);
-    display_flush();
-}
-
-static void draw_game_over_screen(void)
-{
-    fill_screen(0x0);
-    draw_string(25, 10, "GAME OVER!", 0xF);
-    if (g_game.player_score >= WIN_SCORE) {
-        draw_string(30, 30, "YOU WIN!", 0xF);
-    } else {
-        draw_string(30, 30, "AI WINS!", 0xF);
-    }
-    char score_str[24];
-    snprintf(score_str, sizeof(score_str), "Score: %d - %d",
-             g_game.player_score, g_game.enemy_score);
-    draw_string(20, 50, score_str, 0xF);
-    draw_string( 5, 75, "Press START to", 0xF);
-    draw_string( 5, 85, "play again", 0xF);
-    display_flush();
-}
-
-static void draw_playing_screen(void)
-{
-    fill_screen(0x0);
-
-    draw_rect_filled(g_game.player.x, g_game.player.y,
-                     g_game.player.w, g_game.player.h, 0xF);
-    draw_rect_filled(g_game.enemy.x,  g_game.enemy.y,
-                     g_game.enemy.w,  g_game.enemy.h,  0xF);
-    draw_circle_filled(g_game.ball.x, g_game.ball.y, g_game.ball.r, 0xF);
-
-    char s[4];
-    snprintf(s, sizeof(s), "%d", g_game.player_score);
-    draw_string(30, 5, s, 0xF);
-    snprintf(s, sizeof(s), "%d", g_game.enemy_score);
-    draw_string(90, 5, s, 0xF);
-
-    // Dashed center line
-    for (int y = 0; y < SCREEN_HEIGHT; y += 4) {
-        set_pixel(SCREEN_WIDTH / 2, y, 0xF);
-    }
-
-    display_flush();
 }
 
 // --- Public API ---
@@ -347,19 +290,9 @@ esp_err_t display_init(void)
     ssd1327_cmd(0xAF);        // display on
     vTaskDelay(pdMS_TO_TICKS(100)); // 100ms settling time
 
-    fill_screen(0x0);
-    display_flush();
+    gfx_clear(0x0);
+    display_present();
 
     ESP_LOGI(TAG, "SSD1327 initialized");
     return ESP_OK;
-}
-
-void display_draw(void)
-{
-    // Read game state without mutex - one torn frame is acceptable
-    switch (g_game.state) {
-        case GAME_STATE_WAITING:  draw_start_screen();    break;
-        case GAME_STATE_PLAYING:  draw_playing_screen();  break;
-        case GAME_STATE_OVER:     draw_game_over_screen(); break;
-    }
 }

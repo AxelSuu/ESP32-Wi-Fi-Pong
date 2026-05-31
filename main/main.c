@@ -1,6 +1,6 @@
 #include "network.h"
 #include "display.h"
-#include "game.h"
+#include "engine.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
@@ -9,16 +9,18 @@
 
 static const char *TAG = "main";
 
+#define FRAME_MS 30
+
 static void game_task(void *arg)
 {
     xEventGroupWaitBits(net_event_group, NETWORK_READY_BIT,
                         pdFALSE, pdTRUE, portMAX_DELAY);
-    ESP_LOGI(TAG, "Network ready, starting game loop");
+    ESP_LOGI(TAG, "Network ready, starting engine loop");
 
     for (;;) {
-        game_update();
-        display_draw();
-        vTaskDelay(pdMS_TO_TICKS(30));
+        engine_update(FRAME_MS);
+        engine_render();
+        vTaskDelay(pdMS_TO_TICKS(FRAME_MS));
     }
 }
 
@@ -34,7 +36,7 @@ void app_main(void)
     net_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(display_init());
-    game_init();
+    engine_init();
     network_wifi_init_ap();
 
     xTaskCreatePinnedToCore(game_task, "game", 4096, NULL, 5, NULL, 0);

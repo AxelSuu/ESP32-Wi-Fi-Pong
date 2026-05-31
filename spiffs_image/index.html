@@ -3,107 +3,203 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ESP32 Pong Controller</title>
+  <title>GameBox Controller</title>
   <style>
+    :root { --gap: 14px; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
     body {
-      text-align: center;
-      font-family: sans-serif;
-      margin-top: 160px;
-      touch-action: manipulation;
-    }
-    button {
-      font-size: 96px;
-      padding: 80px;
-      margin: 40px;
-      width: 400px;
-      height: 300px;
-      touch-action: manipulation;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #11151c; color: #e8eef5;
+      display: flex; flex-direction: column;
+      touch-action: manipulation; user-select: none; -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
-      box-sizing: border-box;
-      transition: transform 0.1s, opacity 0.1s;
     }
-    button:active {
-      transform: scale(0.95);
-      opacity: 0.8;
+    header { padding: 10px; text-align: center; }
+    h1 { margin: 0; font-size: 20px; letter-spacing: 2px; }
+    #status { font-size: 13px; color: #8a93a0; margin-top: 4px; }
+    #status.connected { color: #4CAF50; }
+    #status.disconnected { color: #f44336; }
+    main { flex: 1; display: flex; flex-direction: column; padding: var(--gap); gap: var(--gap); }
+    .surface { flex: 1; display: none; flex-direction: column; gap: var(--gap); }
+    .surface.active { display: flex; }
+    button {
+      font-size: 30px; font-weight: 700; color: #fff; border: none; border-radius: 16px;
+      background: #2b3442; flex: 1; min-height: 70px;
+      transition: transform .08s, opacity .08s; touch-action: manipulation;
     }
-    .start-btn { background-color: #4CAF50; color: white; }
-    .control-btn { background-color: #008CBA; color: white; }
-    #status {
-      font-size: 18px;
-      color: #666;
-      margin-bottom: 20px;
-    }
-    .connected { color: #4CAF50 !important; }
-    .disconnected { color: #f44336 !important; }
+    button:active { transform: scale(0.96); opacity: 0.85; }
+    .row { display: flex; gap: var(--gap); flex: 1; }
+    .primary { background: #2e7d32; }
+    .accent  { background: #1565c0; }
+    .warn    { background: #b71c1c; }
+    .pill    { flex: 0 0 auto; min-height: 56px; font-size: 20px; }
+    #tiltbar { flex: 0 0 auto; height: 26px; background: #2b3442; border-radius: 13px; position: relative; }
+    #tiltdot { position: absolute; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #1565c0; left: calc(50% - 10px); }
+    .msg { text-align: center; font-size: 22px; color: #cfd6df; margin: auto; }
   </style>
 </head>
 <body>
-  <h2>ESP32 Pong Controller</h2>
-  <div id="status" class="disconnected">Connecting...</div>
+  <header>
+    <h1>GAME BOX</h1>
+    <div id="status" class="disconnected">Connecting...</div>
+  </header>
 
-  <button class="start-btn" onclick="startGame()">START GAME</button><br><br>
+  <main>
+    <!-- MENU -->
+    <div class="surface" data-mode="menu">
+      <div class="row">
+        <button class="accent" ontouchstart="nav(-1)" onclick="nav(-1)">&#9650; UP</button>
+        <button class="accent" ontouchstart="nav(1)"  onclick="nav(1)">&#9660; DOWN</button>
+      </div>
+      <button class="primary" ontouchstart="select()" onclick="select()">SELECT</button>
+    </div>
 
-  <button class="control-btn" onclick="send('up')">Up</button><br>
-  <button class="control-btn" onclick="send('down')">Down</button>
+    <!-- PONG -->
+    <div class="surface" data-mode="pong">
+      <button class="accent" ontouchstart="press('up')"   onclick="press('up')">&#9650; UP</button>
+      <button class="accent" ontouchstart="press('down')" onclick="press('down')">&#9660; DOWN</button>
+      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+    </div>
+
+    <!-- SNAKE -->
+    <div class="surface" data-mode="snake">
+      <div class="row"><button class="accent" ontouchstart="press('up')" onclick="press('up')">&#9650;</button></div>
+      <div class="row">
+        <button class="accent" ontouchstart="press('left')"  onclick="press('left')">&#9664;</button>
+        <button class="accent" ontouchstart="press('right')" onclick="press('right')">&#9654;</button>
+      </div>
+      <div class="row"><button class="accent" ontouchstart="press('down')" onclick="press('down')">&#9660;</button></div>
+      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+    </div>
+
+    <!-- RACER -->
+    <div class="surface" data-mode="racer">
+      <div id="tiltbar"><div id="tiltdot"></div></div>
+      <button class="primary" id="tiltbtn" ontouchstart="enableTilt()" onclick="enableTilt()">ENABLE TILT</button>
+      <div class="row">
+        <button class="accent" ontouchstart="press('left')"  onclick="press('left')">&#9664;</button>
+        <button class="accent" ontouchstart="press('right')" onclick="press('right')">&#9654;</button>
+      </div>
+      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+    </div>
+
+    <!-- TRON -->
+    <div class="surface" data-mode="tron">
+      <div class="row">
+        <button class="accent" ontouchstart="press('left')"  onclick="press('left')">&#8634; LEFT</button>
+        <button class="accent" ontouchstart="press('right')" onclick="press('right')">RIGHT &#8635;</button>
+      </div>
+      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+    </div>
+
+    <!-- WAITING -->
+    <div class="surface" data-mode="waiting">
+      <div class="msg" id="waitmsg">Waiting for players...</div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div class="surface" data-mode="gameover">
+      <div class="msg" id="overmsg">Game Over</div>
+      <button class="primary" ontouchstart="select()" onclick="select()">PLAY AGAIN</button>
+    </div>
+  </main>
 
   <script>
-    let socket;
+    let socket, player = 0, mode = 'menu';
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 10;
     const statusEl = document.getElementById('status');
 
+    function setSurface(m) {
+      mode = m;
+      document.querySelectorAll('.surface').forEach(s => {
+        s.classList.toggle('active', s.dataset.mode === m);
+      });
+    }
+    setSurface('menu');
+
+    function send(obj) {
+      if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(obj));
+    }
+    function nav(d)    { send({ t: 'nav', dir: d }); }
+    function select()  { send({ t: 'select' }); }
+    function back()    { send({ t: 'back' }); setSurface('menu'); }
+    function press(ev) { send({ t: 'input', ev: ev }); }
+    function sendTilt(g) { send({ t: 'tilt', g: Math.round(g * 100) / 100 }); }
+
+    // --- tilt (DeviceOrientation) ---
+    let tiltArmed = false, lastTilt = 0;
+    function onOrient(e) {
+      const now = Date.now();
+      if (now - lastTilt < 40) return;        // ~25 Hz throttle
+      lastTilt = now;
+      const g = e.gamma || 0;                  // left/right tilt in degrees
+      sendTilt(g);
+      const pct = Math.max(-1, Math.min(1, g / 45));
+      document.getElementById('tiltdot').style.left = (50 + pct * 45) + '%';
+    }
+    function armTilt() {
+      if (tiltArmed) return;
+      tiltArmed = true;
+      window.addEventListener('deviceorientation', onOrient);
+      document.getElementById('tiltbtn').textContent = 'TILT ON';
+    }
+    function enableTilt() {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(s => { if (s === 'granted') armTilt(); })
+          .catch(() => {});
+      } else {
+        armTilt();
+      }
+    }
+
+    function onMessage(data) {
+      let m;
+      try { m = JSON.parse(data); } catch (e) { return; }
+      switch (m.t) {
+        case 'welcome': player = m.player; break;
+        case 'active':  setSurface(m.game); break;
+        case 'waiting':
+          document.getElementById('waitmsg').textContent =
+            'Waiting for players ' + m.have + '/' + m.need;
+          setSurface('waiting');
+          break;
+        case 'over':
+          document.getElementById('overmsg').textContent =
+            (m.winner < 0) ? 'Draw!' :
+            (m.winner === player) ? 'You win!' : 'Player ' + (m.winner + 1) + ' wins!';
+          setSurface('gameover');
+          if (navigator.vibrate) navigator.vibrate(60);
+          break;
+      }
+    }
+
     function connect() {
       socket = new WebSocket("ws://" + location.hostname + "/ws");
-
       socket.onopen = () => {
-        console.log("Connected to ESP32 WebSocket");
         statusEl.textContent = "Connected";
         statusEl.className = "connected";
         reconnectAttempts = 0;
+        send({ t: 'hello' });
       };
-
+      socket.onmessage = (e) => onMessage(e.data);
       socket.onclose = () => {
-        console.log("Disconnected");
         statusEl.textContent = "Disconnected - Reconnecting...";
         statusEl.className = "disconnected";
-
         if (reconnectAttempts < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
           reconnectAttempts++;
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
           setTimeout(connect, delay);
         } else {
           statusEl.textContent = "Connection failed - Refresh page";
         }
       };
-
-      socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
+      socket.onerror = () => {};
     }
-
     connect();
-
-    function send(dir) {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "move", dir: dir }));
-      }
-    }
-
-    function startGame() {
-      fetch('/start')
-        .then(response => response.text())
-        .then(data => {
-          console.log(data);
-        })
-        .catch(error => {
-          console.error('Error starting game:', error);
-          alert("Failed to start game");
-        });
-    }
   </script>
 </body>
 </html>
