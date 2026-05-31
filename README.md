@@ -1,14 +1,11 @@
-# ESP32 Wi-Fi GameBox 🎮
+## ESP32 Wi-Fi GameBox
 
 A wireless, self-contained **multi-game console** running on an **ESP32-S3** with an
 **SSD1327 grayscale OLED**. The ESP32 hosts its own Wi-Fi network and serves a web
 controller that **reshapes itself per game** — pick a game from the on-device menu and
 your phone morphs into the right control surface. No app install required.
 
-Grew out of a single-game Pong firmware into a small game engine (see
-[`CLAUDE.md`](CLAUDE.md) for the architecture & migration notes).
-
-## 🕹️ Games
+## Games
 
 | Game  | Players | Controller            | How it plays |
 |-------|---------|-----------------------|--------------|
@@ -21,13 +18,13 @@ Single-player games end on a crash (your score is your distance/length). Tron ne
 phones connected** — selecting it shows a "waiting for players" screen until the second
 phone joins, and a mid-round disconnect awards the round to the remaining rider.
 
-## 🛠️ Hardware Requirements
+## Hardware Requirements
 
 - **ESP32-S3** development board (8 MB flash; uses a custom partition table)
 - **SSD1327 OLED display** (128×128 panel, top 128×96 used, 4-bit grayscale, SPI)
 - Jumper wires
 
-## 📺 Display Wiring (SPI)
+## Display Wiring (SPI)
 
 | SSD1327 Pin | ESP32-S3 GPIO |
 |-------------|---------------|
@@ -55,7 +52,7 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
   </tr>
 </table>
 
-## 📡 How It Works
+## How It Works
 
 1. **Power on** the ESP32 — it creates a Wi-Fi access point (`ESP32-Pong`, pw `12345678`).
 2. **Connect** your phone/laptop to that network. The OLED shows the SSID and the IP.
@@ -63,7 +60,7 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
 4. **Navigate the menu** with Up/Down + SELECT on the phone; the OLED highlights the choice.
 5. **Play!** The phone swaps to that game's controls automatically. MENU returns you.
 
-## 🧱 Architecture
+## Architecture
 
 ```
                  ┌───────────────────────────────────────────────┐
@@ -100,7 +97,7 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
 - **Input is generic.** `network.c` parses the WS JSON into an `input_event_t`
   (`kind`, `player`, `analog`) and hands it to the engine — no game-specific parsing.
 
-## 🔌 WebSocket Protocol
+## WebSocket Protocol
 
 Small flat JSON over `/ws`. `t` = message type.
 
@@ -128,34 +125,8 @@ The `active` message is what drives the controller morph — the phone JS swaps 
 surface based on `game`. The web controller keeps an exponential-backoff reconnect and
 buzzes (`navigator.vibrate`) on round end.
 
-## 📂 Project Structure
 
-```
-ESP32-Wi-Fi-Pong/
-├── main/
-│   ├── main.c           # app_main: init display/engine/network; engine game loop
-│   ├── engine.c/.h      # app state machine, game registry, input dispatch, mutex
-│   ├── game_module.h    # game_module_t vtable + generic input_event_t
-│   ├── pong.c/.h        # Pong module (paddle, ball, adaptive AI)
-│   ├── snake.c/.h       # Snake module
-│   ├── racer.c/.h       # Tilt racer module
-│   ├── tron.c/.h        # Two-player Tron module
-│   ├── display.c/.h     # SSD1327 driver + game-agnostic gfx_* primitives
-│   ├── network.c/.h     # SoftAP + HTTP + WebSocket parse / broadcast
-│   ├── hw_config.h      # Pins / screen / SPI host
-│   ├── net_config.h     # Wi-Fi SSID/PW, max WS clients, SPIFFS path
-│   └── CMakeLists.txt   # Component build configuration
-├── spiffs_image/
-│   └── index.html       # Morphing web controller (menu + per-game surfaces + tilt)
-├── CMakeLists.txt       # Project build configuration
-├── partitions.csv       # Custom partition table (with SPIFFS)
-└── sdkconfig            # ESP-IDF configuration
-```
-
-Per-game tuning lives in each game's own `.c` (e.g. paddle speed in `pong.c`, step rate in
-`snake.c`/`tron.c`) — the headers stay free of Pong-specific constants.
-
-## 🚀 Building & Flashing
+## Building & Flashing
 
 1. **Install ESP-IDF** (v6.0; the project targets ESP32-S3).
 2. **Set up the environment:**
@@ -170,7 +141,7 @@ Per-game tuning lives in each game's own `.c` (e.g. paddle speed in `pong.c`, st
 The web controller (`spiffs_image/index.html`) is packed into the `storage` SPIFFS
 partition automatically during the build.
 
-## ✋ Tilt on iOS
+## Tilt on iOS
 
 iOS Safari requires a user gesture before granting motion access. On the Racer screen tap
 **"ENABLE TILT"** once — it calls `DeviceOrientationEvent.requestPermission()` and then
