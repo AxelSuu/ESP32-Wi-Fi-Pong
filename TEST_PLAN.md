@@ -49,6 +49,19 @@ For 2-player tests (Tron, menu mirror sync) you need **two phones**.
 - [ ] **Menu mirror:** phone shows the live game list; the highlight matches the OLED as you
       nav; nav from one phone updates the other.
 
+## M1 — Neon Polish acceptance (gate before tagging `v0.2`)
+
+- [ ] **Attract screen:** with no phone connected, the OLED runs the animated splash (bouncing
+      ball) and names the AP + `192.168.4.1`; connecting the first phone switches to the menu.
+- [ ] **Menu art:** each row shows its icon + title; the selected row has the highlight bar /
+      bright accent; Tron shows the `2P` tag; the footer shows the SSID and one dot per phone.
+- [ ] **Game-over scores:** Snake/Racer show `GAME OVER / SCORE n` (never "DRAW"); Pong/Tron
+      name the winner; the phone game-over card shows the matching `Score: n` when applicable.
+- [ ] **Menu mirror:** the phone lists the four games and highlights the same entry as the OLED;
+      navigating on one phone updates the list on every connected phone.
+- [ ] **Neon controller:** the page renders fully offline (no CDN), buttons glow, and the
+      morph/reconnect/tilt/vibrate behaviours from M0 still work.
+
 ## Regression checklist (before each commit/tag)
 
 - [ ] Smoke test passes.

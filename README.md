@@ -1,9 +1,23 @@
 ## ESP32 Wi-Fi GameBox
 
-A wireless, self-contained **multi-game console** running on an **ESP32-S3** with an
-**SSD1327 grayscale OLED**. The ESP32 hosts its own Wi-Fi network and serves a web
-controller that **reshapes itself per game** — pick a game from the on-device menu and
-your phone morphs into the right control surface. No app install required.
+A wireless, self-contained multi-game console running on an ESP32-S3 with an
+SSD1327 grayscale LED. The ESP32 hosts its own Wi-Fi network and serves a web
+controller that reshapes itself per game, pick a game from the on-device menu and
+your phone turns into the right control surface. No app install required.
+
+<table>
+  <tr>
+    <td><img src="imgs/pic1.jpeg"></td>
+    <td><img src="imgs/pic2.jpeg"></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td><img src="imgs/wifi.png"></td>
+    <td><img src="imgs/Websocket_controller.png"></td>
+  </tr>
+</table>
 
 ## Games
 
@@ -38,24 +52,12 @@ phone joins, and a mid-round disconnect awards the round to the remaining rider.
 
 Pins live in [`main/hw_config.h`](main/hw_config.h).
 
-<table>
-  <tr>
-    <td><img src="imgs/pic1.jpeg"></td>
-    <td><img src="imgs/pic2.jpeg"></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <td><img src="imgs/wifi.png"></td>
-    <td><img src="imgs/Websocket_controller.png"></td>
-  </tr>
-</table>
-
 ## How It Works
 
 1. **Power on** the ESP32 — it creates a Wi-Fi access point (`ESP32-Pong`, pw `12345678`).
-2. **Connect** your phone/laptop to that network. The OLED shows the SSID and the IP.
+   With no phone connected the OLED runs an **attract screen** that names the AP and IP.
+2. **Connect** your phone/laptop to that network. The OLED switches to the game menu — each
+   game has its own icon, the selected row is highlighted, and a footer dot shows each phone.
 3. **Open a browser** at `http://192.168.4.1`.
 4. **Navigate the menu** with Up/Down + SELECT on the phone; the OLED highlights the choice.
 5. **Play!** The phone swaps to that game's controls automatically. MENU returns you.
@@ -117,7 +119,7 @@ Small flat JSON over `/ws`. `t` = message type.
 | `t` | Fields | Meaning |
 |-----|--------|---------|
 | `welcome` | `player`: 0/1                       | assigned player slot |
-| `screen`  | `mode`:`menu`, `games`:[ids], `idx`:n | menu state → **phone mirrors the OLED menu** |
+| `screen`  | `mode`:`menu`, `games`:[labels], `idx`:n | menu state → **phone mirrors the OLED menu** |
 | `active`  | `game`: id, `players`: n            | a game launched → **phone morphs its controls** |
 | `waiting` | `need`: n, `have`: n                | 2-player game waiting for the second phone |
 | `over`    | `winner`: -1/0/1, `score`: int      | round ended (`winner` -1 = none/draw; `score` -1 = n/a) |

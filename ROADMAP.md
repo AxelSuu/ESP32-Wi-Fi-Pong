@@ -27,27 +27,37 @@ start coding.
 - [x] WebSocket protocol + `ws_broadcast`; fd→player mapping
 - [x] Morphing web controller (`index.html`) with reconnect, tilt, vibrate
 
-## M1 — Neon Polish 🎯 (current)
+## M1 — Neon Polish ✅ (code-complete; awaiting hardware playtest)
 
 Goal: the OLED menu and the phone controller should look like a product, not a debug screen.
-Direction: **neon arcade**.
+Direction: **neon arcade**. All items below are **implemented and in-tree**; tick the
+release once they pass a playtest pass against `TEST_PLAN.md`, then tag `v0.2`.
 
-- [ ] **Game-over scores** — add `score()` to the vtable + `score` to the `over` message;
+- [x] **Game-over scores** — `score()` on the vtable + `score` in the `over` message;
       Snake/Racer show `GAME OVER / SCORE n` (not "DRAW"), Pong/Tron show the real result
-- [ ] **`gfx_bitmap` primitive** — 1-bpp sprite blit on top of `gfx_pixel`
-- [ ] **Per-game icons** — `icons.h` sprites for Pong/Snake/Racer/Tron
-- [ ] **OLED menu redesign** — header band, divider, highlight bar, per-game icons, `2P` tag,
+- [x] **`gfx_bitmap` primitive** — 1-bpp sprite blit on top of `gfx_pixel` (`display.c`)
+- [x] **Per-game icons** — `icons.h` 16×16 sprites for Pong/Snake/Racer/Tron
+- [x] **OLED menu redesign** — header band, divider, highlight bar, per-game icons, `2P` tag,
       connected-phone count in the footer (`net_player_count()`)
-- [ ] **Idle / attract screen** — animated splash when no phone is connected; names the AP
-- [ ] **Controller redesign** — neon theme (glow, gradients, per-game button art), offline-safe
-- [ ] **Menu mirror (`screen` message)** — phone shows the live game list + highlight instead
+- [x] **Idle / attract screen** — animated splash (`render_attract`, free-running `s_anim_ms`)
+      when no phone is connected; names the AP and IP
+- [x] **Controller redesign** — neon theme (glow, gradients, per-game art), offline-safe inline CSS
+- [x] **Menu mirror (`screen` message)** — phone shows the live game list + highlight instead
       of blind up/down/select
 
-## M2 — Productionize (deferred; CLAUDE.md §7–8 step 8)
+## M2 — Productionize 🎯 (current; CLAUDE.md §7 + §8 step 8)
+
+Nothing here is started yet: `partitions.csv` is still a single `factory` slot and the SSID
+is the static `ESP32-Pong`.
 
 - [ ] Unique SoftAP SSID per unit (NVS `factory` id, fall back to efuse MAC) + show on screen
-- [ ] OTA dual-slot partition table; update path (menu action or `/update`)
+- [ ] OTA dual-slot partition table (`partitions.csv` → `ota_0`/`ota_1`/`otadata`); update path
+      (menu action or `/update`)
 - [ ] Brownout verification under Wi-Fi TX burst
+- [ ] **Robust disconnect cleanup** — register httpd `config.close_fn` so an abrupt drop (phone
+      leaves Wi-Fi / backgrounds without a WS CLOSE frame) clears its fd and fires
+      `engine_on_player_disconnect`. Today only an explicit CLOSE frame is handled, so a hard
+      drop leaves a stale fd → `net_player_count()` overcounts and a Tron round won't end.
 
 ## M3 — Backlog (unscheduled ideas)
 
@@ -61,5 +71,7 @@ Direction: **neon arcade**.
 
 ## Changelog
 
-- _unreleased_ — M1 in progress.
+- _unreleased_ — M1 (neon polish) code-complete: game-over scores, `gfx_bitmap` + per-game
+  icons, redesigned OLED menu, idle/attract screen, neon controller, `screen` menu mirror.
+  Awaiting a hardware playtest pass → tag `v0.2`.
 - `v0.1` — M0: multi-game engine + morphing controller (Pong/Snake/Racer/Tron).
