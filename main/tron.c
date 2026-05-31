@@ -107,6 +107,7 @@ static void tron_render(void)
 
 static bool tron_is_over(void) { return s_over; }
 static int  tron_winner(void)  { return s_winner; }
+static int  tron_score(void)   { return -1; }
 
 const game_module_t TRON = {
     .id          = "tron",
@@ -118,4 +119,5 @@ const game_module_t TRON = {
     .render      = tron_render,
     .is_over     = tron_is_over,
     .winner      = tron_winner,
+    .score       = tron_score,
 };

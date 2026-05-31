@@ -204,6 +204,18 @@ void gfx_text(int x, int y, const char *str, uint8_t color)
     }
 }
 
+void gfx_bitmap(int x, int y, int w, int h, const uint8_t *bits, uint8_t color)
+{
+    int stride = (w + 7) / 8;   // bytes per row (rows are byte-aligned)
+    for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+            uint8_t byte = bits[row * stride + (col >> 3)];
+            if (byte & (0x80 >> (col & 7)))
+                gfx_pixel(x + col, y + row, color);  // gfx_pixel clips for us
+        }
+    }
+}
+
 void display_present(void)
 {
     // Set column address 0–63 (128 pixels / 2 per byte)

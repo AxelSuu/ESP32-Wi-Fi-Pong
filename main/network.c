@@ -118,6 +118,11 @@ static void ws_broadcast(const char *json)
     for (int i = 0; i < n; i++) ws_send_one(fds[i], json);
 }
 
+void net_broadcast_json(const char *json)
+{
+    ws_broadcast(json);
+}
+
 void net_broadcast_active(const char *game_id, int players)
 {
     char buf[64];
@@ -133,10 +138,11 @@ void net_broadcast_waiting(int need, int have)
     ws_broadcast(buf);
 }
 
-void net_broadcast_over(int winner)
+void net_broadcast_over(int winner, int score)
 {
-    char buf[40];
-    snprintf(buf, sizeof buf, "{\"t\":\"over\",\"winner\":%d}", winner);
+    char buf[56];
+    snprintf(buf, sizeof buf, "{\"t\":\"over\",\"winner\":%d,\"score\":%d}",
+             winner, score);
     ws_broadcast(buf);
 }
 

@@ -89,6 +89,11 @@ static int pong_winner(void)
     return -1;
 }
 
+static int pong_score(void)
+{
+    return -1;
+}
+
 static void pong_tick(uint32_t dt_ms)
 {
     (void)dt_ms;
@@ -197,4 +202,5 @@ const game_module_t PONG = {
     .render      = pong_render,
     .is_over     = pong_is_over,
     .winner      = pong_winner,
+    .score       = pong_score,
 };

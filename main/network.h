@@ -18,4 +18,5 @@ int  net_player_count(void);
 // engine mutex is held (these only touch the fd table + copied strings).
 void net_broadcast_active(const char *game_id, int players);  // controller morph
 void net_broadcast_waiting(int need, int have);
-void net_broadcast_over(int winner);
+void net_broadcast_over(int winner, int score);
+void net_broadcast_json(const char *json);

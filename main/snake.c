@@ -110,6 +110,7 @@ static void snake_render(void)
 
 static bool snake_is_over(void) { return s_over; }
 static int  snake_winner(void)  { return -1; }
+static int  snake_score(void)   { return s_len - START_LEN; }
 
 const game_module_t SNAKE = {
     .id          = "snake",
@@ -121,4 +122,5 @@ const game_module_t SNAKE = {
     .render      = snake_render,
     .is_over     = snake_is_over,
     .winner      = snake_winner,
+    .score       = snake_score,
 };

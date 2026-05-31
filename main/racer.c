@@ -123,6 +123,7 @@ static void racer_render(void)
 
 static bool racer_is_over(void) { return s_over; }
 static int  racer_winner(void)  { return -1; }
+static int  racer_score(void)   { return (int)(s_score / 10); }
 
 const game_module_t RACER = {
     .id          = "racer",
@@ -134,4 +135,5 @@ const game_module_t RACER = {
     .render      = racer_render,
     .is_over     = racer_is_over,
     .winner      = racer_winner,
+    .score       = racer_score,
 };

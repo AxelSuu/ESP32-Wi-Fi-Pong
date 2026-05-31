@@ -116,14 +116,17 @@ Small flat JSON over `/ws`. `t` = message type.
 
 | `t` | Fields | Meaning |
 |-----|--------|---------|
-| `welcome` | `player`: 0/1            | assigned player slot |
-| `active`  | `game`: id, `players`: n | a game launched → **phone morphs its controls** |
-| `waiting` | `need`: n, `have`: n     | 2-player game waiting for the second phone |
-| `over`    | `winner`: -1/0/1         | round ended (-1 = none/draw) |
+| `welcome` | `player`: 0/1                       | assigned player slot |
+| `screen`  | `mode`:`menu`, `games`:[ids], `idx`:n | menu state → **phone mirrors the OLED menu** |
+| `active`  | `game`: id, `players`: n            | a game launched → **phone morphs its controls** |
+| `waiting` | `need`: n, `have`: n                | 2-player game waiting for the second phone |
+| `over`    | `winner`: -1/0/1, `score`: int      | round ended (`winner` -1 = none/draw; `score` -1 = n/a) |
 
-The `active` message is what drives the controller morph — the phone JS swaps its control
-surface based on `game`. The web controller keeps an exponential-backoff reconnect and
-buzzes (`navigator.vibrate`) on round end.
+The `active` message drives the controller morph — the phone JS swaps its control surface
+based on `game`. The `screen` message mirrors the on-device menu so the phone shows the live
+game list with the highlighted entry (instead of blind Up/Down). On `over`, single-player
+games (Snake/Racer) report a `score` and the phone shows `Score: n`. The web controller keeps
+an exponential-backoff reconnect and buzzes (`navigator.vibrate`) on input and round end.
 
 
 ## Building & Flashing

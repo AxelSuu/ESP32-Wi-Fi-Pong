@@ -35,4 +35,5 @@ typedef struct {
     void (*render)(void);                      // draw the world via gfx_* (no clear/present)
     bool (*is_over)(void);                     // round finished?
     int  (*winner)(void);                      // -1 none/draw, else player id
+    int  (*score)(void);                       // -1 n/a, else game-specific score
 } game_module_t;
