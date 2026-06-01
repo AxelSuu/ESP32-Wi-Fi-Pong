@@ -7,7 +7,8 @@ Track features in [`ROADMAP.md`](ROADMAP.md).
 ## Setup
 
 1. `idf.py build flash monitor`
-2. On a phone/laptop, join Wi-Fi **`ESP32-Pong`**, password **`12345678`**.
+2. On a phone/laptop, join the unit's Wi-Fi — a per-unit **`GameBox-XXXX`** (the exact SSID is
+   shown on the OLED attract/menu screen and logged at boot), password **`12345678`**.
 3. Open **`http://192.168.4.1`**.
 
 For 2-player tests (Tron, menu mirror sync) you need **two phones**.
@@ -61,6 +62,24 @@ For 2-player tests (Tron, menu mirror sync) you need **two phones**.
       navigating on one phone updates the list on every connected phone.
 - [ ] **Neon controller:** the page renders fully offline (no CDN), buttons glow, and the
       morph/reconnect/tilt/vibrate behaviours from M0 still work.
+
+## M2 — Productionize acceptance (gate before tagging `v0.3`)
+
+- [ ] **Per-unit SSID:** boot logs `WiFi AP started: SSID=GameBox-XXXX`; the OLED attract +
+      menu footer show that same SSID; the phone joins it and reaches `192.168.4.1`. Two units
+      powered together advertise **different** SSIDs (no collision).
+- [ ] **OTA partition table:** `idf.py partition-table` validates; `idf.py size` shows the app
+      fitting an `ota_0`/`ota_1` slot; the device boots normally from `ota_0` after a fresh flash.
+- [ ] **OTA update path:** tap **⚙** on the controller, pick a freshly-built `app.bin`, **FLASH**;
+      the page reports "rebooting", the device resets into the new image (serial shows boot from
+      the *other* OTA slot), and the controller reconnects. A truncated/garbage file is rejected
+      ("image invalid") without bricking the running slot.
+- [ ] **Robust disconnect cleanup:** with a phone connected, **kill its Wi-Fi / background it**
+      (no graceful close). Serial shows the slot freed; the OLED footer phone-dot count drops; a
+      2-player **Tron** round in progress ends and awards the survivor (no stale fd → no hung
+      round, no `net_player_count()` overcount on the next launch).
+- [ ] **Brownout (hardware):** play a full loop incl. Wi-Fi TX bursts (many phones, OTA upload);
+      **no brownout resets** in the serial log. Detector stays enabled at the IDF default.
 
 ## Regression checklist (before each commit/tag)
 

@@ -200,7 +200,7 @@ static void render_menu(void)
 
     // Footer: AP name + connected-phone dots.
     gfx_rect(0, 80, SCREEN_WIDTH, 1, 0x4);
-    gfx_text(2, 84, WIFI_SSID, 0x9);
+    gfx_text(2, 84, net_ssid(), 0x9);
     int players = net_player_count();
     for (int i = 0; i < players && i < MAX_WS_CLIENTS; i++)
         gfx_circle(SCREEN_WIDTH - 8 - i * 7, 87, 2, 0xF);
@@ -223,7 +223,7 @@ static void render_attract(void)
     gfx_circle(bx, by, 3, 0xF);
 
     center_text(58, "JOIN WIFI", 0x9);
-    center_text(70, WIFI_SSID, 0xF);
+    center_text(70, net_ssid(), 0xF);
     center_text(84, "192.168.4.1", 0x9);
 }
 

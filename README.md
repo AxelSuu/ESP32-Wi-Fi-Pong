@@ -54,8 +54,10 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
 
 ## How It Works
 
-1. **Power on** the ESP32 — it creates a Wi-Fi access point (`ESP32-Pong`, pw `12345678`).
-   With no phone connected the OLED runs an **attract screen** that names the AP and IP.
+1. **Power on** the ESP32 — it creates a Wi-Fi access point with a **per-unit SSID**
+   (`GameBox-XXXX`, where `XXXX` is from the board's MAC; pw `12345678`), so two consoles in
+   one room never collide. With no phone connected the OLED runs an **attract screen** that
+   names the exact AP and IP.
 2. **Connect** your phone/laptop to that network. The OLED switches to the game menu — each
    game has its own icon, the selected row is highlighted, and a footer dot shows each phone.
 3. **Open a browser** at `http://192.168.4.1`.
@@ -145,6 +147,19 @@ an exponential-backoff reconnect and buzzes (`navigator.vibrate`) on input and r
 
 The web controller (`spiffs_image/index.html`) is packed into the `storage` SPIFFS
 partition automatically during the build.
+
+## Updating firmware (OTA)
+
+The flash uses a **dual-slot OTA partition table** (`ota_0` / `ota_1` / `otadata` in
+`partitions.csv`), so the firmware can be updated wirelessly without a USB cable:
+
+1. Build a new image (`idf.py build`) — the app binary is `build/<project>.bin`.
+2. On the controller page, tap the **⚙** button (top-right), choose that `.bin`, and tap
+   **FLASH**. The phone POSTs it to `/update`; the device streams it into the inactive OTA
+   slot, marks it bootable, and reboots into the new image. The controller then reconnects.
+
+A bad/truncated upload is rejected (`image invalid`) and the currently-running slot is left
+untouched. The first USB flash still uses `idf.py flash`.
 
 ## Tilt on iOS
 

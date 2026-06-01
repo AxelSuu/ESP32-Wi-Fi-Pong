@@ -5,13 +5,19 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_http_server.h"
 #include "esp_spiffs.h"
+#include "esp_system.h"
+#include "esp_ota_ops.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "freertos/semphr.h"
 
 #define WS_RX_BUF_SIZE 128
@@ -23,6 +29,31 @@ EventGroupHandle_t net_event_group;
 static httpd_handle_t s_server = NULL;
 static int s_ws_fds[MAX_WS_CLIENTS];
 static SemaphoreHandle_t s_ws_fd_mutex;
+
+// Per-unit SoftAP SSID (32-char max per 802.11 + NUL). Filled by net_derive_ssid().
+static char s_ssid[33];
+
+const char *net_ssid(void)
+{
+    return s_ssid;
+}
+
+// Pick this unit's SSID once at bring-up: a provisioned name in the "factory"
+// NVS namespace wins (written by the flashing jig); otherwise derive a stable
+// per-unit name from the SoftAP MAC so two consoles never collide.
+static void net_derive_ssid(void)
+{
+    nvs_handle_t h;
+    if (nvs_open("factory", NVS_READONLY, &h) == ESP_OK) {
+        size_t len = sizeof s_ssid;
+        esp_err_t e = nvs_get_str(h, "ssid", s_ssid, &len);
+        nvs_close(h);
+        if (e == ESP_OK && s_ssid[0]) return;
+    }
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
+    snprintf(s_ssid, sizeof s_ssid, "%s-%02X%02X", WIFI_SSID_PREFIX, mac[4], mac[5]);
+}
 
 // --- WS client fd table; the slot index is the player id ---
 
@@ -71,6 +102,28 @@ int net_player_count(void)
     for (int i = 0; i < MAX_WS_CLIENTS; i++) if (s_ws_fds[i] != -1) n++;
     xSemaphoreGive(s_ws_fd_mutex);
     return n;
+}
+
+// Release a client slot and notify the engine — idempotent, so the graceful
+// CLOSE-frame path and the close_fn safety net can both call it. Runs on the
+// httpd task; never holds the engine mutex, so the engine may take it freely.
+static void ws_cleanup_fd(int fd)
+{
+    int slot = slot_of_fd(fd);
+    if (slot < 0) return;                  // already cleaned up / not one of ours
+    ws_fd_remove(fd);
+    engine_on_player_disconnect(slot);
+}
+
+// httpd close_fn: fires whenever httpd tears down a socket — including abrupt
+// drops (phone leaves Wi-Fi / backgrounds) that never send a WS CLOSE frame, so
+// stale fds can't linger and overcount net_player_count(). Replacing the default
+// close_fn means we own closing the socket.
+static void ws_close_fn(httpd_handle_t hd, int sockfd)
+{
+    (void)hd;
+    ws_cleanup_fd(sockfd);
+    close(sockfd);
 }
 
 // --- async send / broadcast ---
@@ -204,9 +257,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (ret != ESP_OK) return ret;
 
     if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-        int slot = slot_of_fd(fd);
-        ws_fd_remove(fd);
-        if (slot >= 0) engine_on_player_disconnect(slot);
+        ws_cleanup_fd(fd);                 // close_fn would catch it too, but be prompt
         return ESP_OK;
     }
 
@@ -285,10 +336,67 @@ static esp_err_t index_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// OTA over the SoftAP: the controller POSTs a raw firmware .bin here; we stream
+// it into the inactive OTA slot, mark it bootable, and reboot. No rollback is
+// configured, so the new image just boots on success.
+static esp_err_t update_handler(httpd_req_t *req)
+{
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    if (!part) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no OTA slot");
+        return ESP_FAIL;
+    }
+
+    esp_ota_handle_t ota = 0;
+    esp_err_t err = esp_ota_begin(part, OTA_SIZE_UNKNOWN, &ota);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_begin: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "ota begin failed");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "OTA -> %s (%d bytes)", part->label, req->content_len);
+
+    char  buf[1024];
+    int   remaining = req->content_len;
+    while (remaining > 0) {
+        int want = remaining < (int)sizeof buf ? remaining : (int)sizeof buf;
+        int r    = httpd_req_recv(req, buf, want);
+        if (r <= 0) {
+            if (r == HTTPD_SOCK_ERR_TIMEOUT) continue;
+            esp_ota_abort(ota);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "recv failed");
+            return ESP_FAIL;
+        }
+        if (esp_ota_write(ota, buf, r) != ESP_OK) {
+            esp_ota_abort(ota);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "write failed");
+            return ESP_FAIL;
+        }
+        remaining -= r;
+    }
+
+    if (esp_ota_end(ota) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "image invalid");
+        return ESP_FAIL;
+    }
+    if (esp_ota_set_boot_partition(part) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "set boot failed");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "OTA ok; rebooting into %s", part->label);
+    httpd_resp_sendstr(req, "OK");
+    vTaskDelay(pdMS_TO_TICKS(500));        // let the response flush before reset
+    esp_restart();
+    return ESP_OK;
+}
+
 static void start_webserver(void)
 {
     httpd_config_t config    = HTTPD_DEFAULT_CONFIG();
     config.max_open_sockets  = 7;
+    config.lru_purge_enable  = true;       // reclaim the oldest socket when full
+    config.close_fn          = ws_close_fn; // clear player slots on any disconnect
 
     if (httpd_start(&s_server, &config) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start httpd");
@@ -301,6 +409,13 @@ static void start_webserver(void)
         .handler = index_handler,
     };
     httpd_register_uri_handler(s_server, &uri_index);
+
+    httpd_uri_t uri_update = {
+        .uri     = "/update",
+        .method  = HTTP_POST,
+        .handler = update_handler,
+    };
+    httpd_register_uri_handler(s_server, &uri_update);
 
     httpd_uri_t uri_ws = {
         .uri          = "/ws",
@@ -340,6 +455,8 @@ void network_wifi_init_ap(void)
     s_ws_fd_mutex = xSemaphoreCreateMutex();
     for (int i = 0; i < MAX_WS_CLIENTS; i++) s_ws_fds[i] = -1;
 
+    net_derive_ssid();
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
@@ -352,18 +469,20 @@ void network_wifi_init_ap(void)
 
     wifi_config_t wifi_cfg = {
         .ap = {
-            .ssid            = WIFI_SSID,
-            .ssid_len        = sizeof(WIFI_SSID) - 1,
             .password        = WIFI_PASSWORD,
             .channel         = WIFI_AP_CHANNEL,
             .max_connection  = WIFI_MAX_CONN,
             .authmode        = WIFI_AUTH_WPA2_PSK,
         },
     };
+    size_t ssid_len = strlen(s_ssid);
+    if (ssid_len > sizeof(wifi_cfg.ap.ssid)) ssid_len = sizeof(wifi_cfg.ap.ssid);
+    memcpy(wifi_cfg.ap.ssid, s_ssid, ssid_len);
+    wifi_cfg.ap.ssid_len = ssid_len;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "WiFi AP started: SSID=%s", WIFI_SSID);
+    ESP_LOGI(TAG, "WiFi AP started: SSID=%s", s_ssid);
 }

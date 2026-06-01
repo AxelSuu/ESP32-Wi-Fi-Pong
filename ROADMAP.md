@@ -45,19 +45,24 @@ release once they pass a playtest pass against `TEST_PLAN.md`, then tag `v0.2`.
 - [x] **Menu mirror (`screen` message)** — phone shows the live game list + highlight instead
       of blind up/down/select
 
-## M2 — Productionize 🎯 (current; CLAUDE.md §7 + §8 step 8)
+## M2 — Productionize 🎯 (code-complete; awaiting hardware playtest; CLAUDE.md §7 + §8 step 8)
 
-Nothing here is started yet: `partitions.csv` is still a single `factory` slot and the SSID
-is the static `ESP32-Pong`.
+All code below is **implemented and in-tree**; tick the release once it passes a hardware
+playtest against `TEST_PLAN.md`, then tag `v0.3`. (Brownout is a hardware-only check.)
 
-- [ ] Unique SoftAP SSID per unit (NVS `factory` id, fall back to efuse MAC) + show on screen
-- [ ] OTA dual-slot partition table (`partitions.csv` → `ota_0`/`ota_1`/`otadata`); update path
-      (menu action or `/update`)
-- [ ] Brownout verification under Wi-Fi TX burst
-- [ ] **Robust disconnect cleanup** — register httpd `config.close_fn` so an abrupt drop (phone
-      leaves Wi-Fi / backgrounds without a WS CLOSE frame) clears its fd and fires
-      `engine_on_player_disconnect`. Today only an explicit CLOSE frame is handled, so a hard
-      drop leaves a stale fd → `net_player_count()` overcounts and a Tron round won't end.
+- [x] Unique SoftAP SSID per unit (NVS `factory` id, fall back to efuse MAC) + show on screen
+      — `net_derive_ssid()` / `net_ssid()` in `network.c`; `WIFI_SSID_PREFIX` in `net_config.h`;
+      the menu footer + attract screen render the live SSID
+- [x] OTA dual-slot partition table (`partitions.csv` → `ota_0`/`ota_1`/`otadata`); update path
+      — `POST /update` streams a `.bin` into the inactive slot and reboots (`update_handler` in
+      `network.c`); the controller has a ⚙ firmware-update overlay. `app_update` added to
+      `PRIV_REQUIRES`.
+- [ ] Brownout verification under Wi-Fi TX burst — **hardware-only** (detector stays enabled at
+      the ESP-IDF default); see `TEST_PLAN.md`. Tick after a playtest with no brownout resets.
+- [x] **Robust disconnect cleanup** — httpd `config.close_fn` (`ws_close_fn`) now clears the fd
+      and fires `engine_on_player_disconnect` on *any* socket teardown, not just an explicit WS
+      CLOSE frame, so a hard drop can't leave a stale fd (`net_player_count()` overcount / Tron
+      round that won't end). Both paths funnel through the idempotent `ws_cleanup_fd()`.
 
 ## M3 — Backlog (unscheduled ideas)
 
@@ -71,6 +76,10 @@ is the static `ESP32-Pong`.
 
 ## Changelog
 
+- _unreleased_ — M2 (productionize) code-complete: per-unit SoftAP SSID (`GameBox-XXXX` /
+  NVS `factory`), dual-slot OTA partition table + `POST /update` upload path & controller
+  overlay, robust `close_fn` disconnect cleanup. Awaiting a hardware playtest (incl. brownout
+  under Wi-Fi TX) → tag `v0.3`.
 - _unreleased_ — M1 (neon polish) code-complete: game-over scores, `gfx_bitmap` + per-game
   icons, redesigned OLED menu, idle/attract screen, neon controller, `screen` menu mirror.
   Awaiting a hardware playtest pass → tag `v0.2`.
