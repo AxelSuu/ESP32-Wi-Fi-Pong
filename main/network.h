@@ -9,6 +9,11 @@ extern EventGroupHandle_t net_event_group;
 
 void network_wifi_init_ap(void);
 
+// The active SoftAP SSID for this unit (per-unit identity; see net_config.h).
+// Valid after network_wifi_init_ap(); the engine shows it on the menu/attract
+// screen so players know which AP to join.
+const char *net_ssid(void);
+
 // --- Server -> client messaging (used by the engine) ---
 
 // Number of currently connected WebSocket clients (= occupied player slots).

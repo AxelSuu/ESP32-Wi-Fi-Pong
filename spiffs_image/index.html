@@ -84,13 +84,41 @@
 
     .msg { text-align: center; font-size: 24px; font-weight: 800; color: #eaf6ff; margin: auto; text-shadow: 0 0 10px rgba(41,240,255,.5); }
     .sub { text-align: center; font-size: 16px; color: #9fb0cc; margin-top: 6px; }
+
+    /* firmware update overlay */
+    #gear {
+      position: absolute; top: 10px; right: 12px; width: 38px; min-height: 38px;
+      flex: none; font-size: 18px; padding: 0; border-radius: 10px;
+    }
+    #ota {
+      position: fixed; inset: 0; z-index: 5; display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; padding: 24px; background: rgba(5,7,13,.94);
+    }
+    #ota.show { display: flex; }
+    #ota h2 { margin: 0; letter-spacing: 3px; color: #fff; text-shadow: 0 0 10px var(--cyan); }
+    #ota .row, #ota button { flex: none; }
+    #ota button { min-height: 56px; padding: 0 24px; }
+    #otafile { color: #cdd8ea; font-size: 15px; }
+    #ustatus { font-size: 14px; color: #9fb0cc; min-height: 18px; text-align: center; }
   </style>
 </head>
 <body>
-  <header>
+  <header style="position: relative;">
     <h1>GAMEBOX</h1>
     <div id="status" class="disconnected">CONNECTING…</div>
+    <button id="gear" class="accent" onclick="toggleOta(true)" title="Firmware update">&#9881;</button>
   </header>
+
+  <!-- FIRMWARE UPDATE (OTA over the SoftAP) -->
+  <div id="ota">
+    <h2>FIRMWARE UPDATE</h2>
+    <div class="sub">Upload a new <code>.bin</code> over Wi-Fi.<br>The console reboots when done.</div>
+    <input id="otafile" type="file" accept=".bin">
+    <button class="primary" onclick="flash()">FLASH</button>
+    <div id="ustatus"></div>
+    <button class="pill warn" onclick="toggleOta(false)">CLOSE</button>
+  </div>
 
   <main>
     <!-- MENU (mirrors the OLED via the "screen" message) -->
@@ -176,6 +204,23 @@
 
     function send(obj) {
       if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(obj));
+    }
+
+    // --- firmware update (POST a .bin to /update) ---
+    function toggleOta(show) {
+      document.getElementById('ota').classList.toggle('show', show);
+      if (!show) document.getElementById('ustatus').textContent = '';
+    }
+    function flash() {
+      const f = document.getElementById('otafile').files[0];
+      const st = document.getElementById('ustatus');
+      if (!f) { st.textContent = 'Pick a .bin first'; return; }
+      st.textContent = 'Uploading ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)…';
+      fetch('/update', { method: 'POST', body: f })
+        .then(r => r.text().then(t => {
+          st.textContent = r.ok ? 'Flashed — console rebooting…' : ('Failed: ' + (t || r.status));
+        }))
+        .catch(() => { st.textContent = 'Upload error — check Wi-Fi'; });
     }
     function nav(d)    { send({ t: 'nav', dir: d }); }
     function select()  { send({ t: 'select' }); }
