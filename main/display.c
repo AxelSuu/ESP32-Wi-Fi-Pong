@@ -278,7 +278,7 @@ esp_err_t display_init(void)
     ssd1327_cmd(0xA1);        // start line
     ssd1327_cmd(0x00);
     ssd1327_cmd(0xA2);        // display offset
-    ssd1327_cmd(0x00);
+    ssd1327_cmd(128 - SCREEN_HEIGHT); // =32: COM-flip + MUX<128 shifts scan by (128-MUX); cancel it
     ssd1327_cmd(0xA6);        // all pixels off during init
     ssd1327_cmd(0xA8);        // multiplex ratio
     ssd1327_cmd(0x5F);        // 95 = 96 rows − 1 (correct for 128×96 panel)

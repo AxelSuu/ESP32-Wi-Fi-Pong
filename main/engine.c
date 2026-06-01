@@ -116,8 +116,11 @@ void engine_dispatch_input(const input_event_t *ev)
         }
         break;
     case APP_GAMEOVER:
-        if (ev->kind == INPUT_SELECT || ev->kind == INPUT_BACK ||
-            ev->kind == INPUT_PRIMARY) {
+        if ((ev->kind == INPUT_SELECT || ev->kind == INPUT_PRIMARY) && s_active) {
+            const game_module_t *restart = s_active;
+            s_app = APP_MENU;
+            try_launch(restart);
+        } else if (ev->kind == INPUT_BACK) {
             s_app = APP_MENU;
             broadcast_menu_state();
         }
@@ -241,7 +244,8 @@ static void render_gameover(void)
         snprintf(line, sizeof(line), "SCORE %d", s_last_score);
         gfx_text(34, (s_last_winner >= 0) ? 54 : 44, line, 0xC);
     }
-    gfx_text(8, 80, "SELECT = menu", 0x9);
+    gfx_text(8, 76, "SELECT = again", 0x9);
+    gfx_text(8, 86, "BACK = menu", 0x9);
 }
 
 void engine_render(void)

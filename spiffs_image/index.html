@@ -123,50 +123,49 @@
   <main>
     <!-- MENU (mirrors the OLED via the "screen" message) -->
     <div class="surface" data-mode="menu">
-      <div id="menulist" class="menulist"></div>
       <div class="row">
-        <button class="accent" ontouchstart="nav(-1)" onclick="nav(-1)">&#9650;</button>
-        <button class="accent" ontouchstart="nav(1)"  onclick="nav(1)">&#9660;</button>
+        <button class="accent" onclick="nav(-1)">&#9650;</button>
+        <button class="accent" onclick="nav(1)">&#9660;</button>
       </div>
-      <button class="primary" ontouchstart="select()" onclick="select()">SELECT</button>
+      <button class="primary" onclick="select()">SELECT</button>
     </div>
 
     <!-- PONG -->
     <div class="surface" data-mode="pong">
-      <button class="accent" ontouchstart="press('up')"   onclick="press('up')">&#9650; UP</button>
-      <button class="accent" ontouchstart="press('down')" onclick="press('down')">&#9660; DOWN</button>
-      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+      <button class="accent" onclick="press('up')">&#9650; UP</button>
+      <button class="accent" onclick="press('down')">&#9660; DOWN</button>
+      <button class="pill warn" onclick="back()">MENU</button>
     </div>
 
     <!-- SNAKE -->
     <div class="surface" data-mode="snake">
-      <div class="row"><button class="accent" ontouchstart="press('up')" onclick="press('up')">&#9650;</button></div>
+      <div class="row"><button class="accent" onclick="press('up')">&#9650;</button></div>
       <div class="row">
-        <button class="accent" ontouchstart="press('left')"  onclick="press('left')">&#9664;</button>
-        <button class="accent" ontouchstart="press('right')" onclick="press('right')">&#9654;</button>
+        <button class="accent" onclick="press('left')">&#9664;</button>
+        <button class="accent" onclick="press('right')">&#9654;</button>
       </div>
-      <div class="row"><button class="accent" ontouchstart="press('down')" onclick="press('down')">&#9660;</button></div>
-      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+      <div class="row"><button class="accent" onclick="press('down')">&#9660;</button></div>
+      <button class="pill warn" onclick="back()">MENU</button>
     </div>
 
     <!-- RACER -->
     <div class="surface" data-mode="racer">
       <div id="tiltbar"><div id="tiltdot"></div></div>
-      <button class="primary" id="tiltbtn" ontouchstart="enableTilt()" onclick="enableTilt()">ENABLE TILT</button>
+      <button class="primary" id="tiltbtn" onclick="enableTilt()">ENABLE TILT</button>
       <div class="row">
-        <button class="accent" ontouchstart="press('left')"  onclick="press('left')">&#9664;</button>
-        <button class="accent" ontouchstart="press('right')" onclick="press('right')">&#9654;</button>
+        <button class="accent" onclick="press('left')">&#9664;</button>
+        <button class="accent" onclick="press('right')">&#9654;</button>
       </div>
-      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+      <button class="pill warn" onclick="back()">MENU</button>
     </div>
 
     <!-- TRON -->
     <div class="surface" data-mode="tron">
       <div class="row">
-        <button class="accent" ontouchstart="press('left')"  onclick="press('left')">&#8634; LEFT</button>
-        <button class="accent" ontouchstart="press('right')" onclick="press('right')">RIGHT &#8635;</button>
+        <button class="accent" onclick="press('left')">&#8634; LEFT</button>
+        <button class="accent" onclick="press('right')">RIGHT &#8635;</button>
       </div>
-      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+      <button class="pill warn" onclick="back()">MENU</button>
     </div>
 
     <!-- WAITING -->
@@ -183,8 +182,8 @@
         <div class="msg" id="overmsg">GAME OVER</div>
         <div class="sub" id="overscore"></div>
       </div>
-      <button class="primary" ontouchstart="select()" onclick="select()">PLAY AGAIN</button>
-      <button class="pill warn" ontouchstart="back()" onclick="back()">MENU</button>
+      <button class="primary" onclick="select()">PLAY AGAIN</button>
+      <button class="pill warn" onclick="back()">MENU</button>
     </div>
   </main>
 
@@ -230,21 +229,8 @@
 
     // --- menu mirror ---
     function renderMenu(games, idx) {
-      const list = document.getElementById('menulist');
-      list.innerHTML = '';
-      (games || []).forEach((name, i) => {
-        const div = document.createElement('div');
-        div.className = 'menu-item' + (i === idx ? ' sel' : '');
-        const label = document.createElement('span');
-        label.textContent = name;
-        div.appendChild(label);
-        if (/^TRON$/i.test(name)) {
-          const b = document.createElement('span');
-          b.className = 'badge'; b.textContent = '2P';
-          div.appendChild(b);
-        }
-        list.appendChild(div);
-      });
+      void games;
+      void idx;
     }
 
     // --- tilt (DeviceOrientation) ---
