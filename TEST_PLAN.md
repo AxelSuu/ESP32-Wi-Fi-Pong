@@ -18,6 +18,8 @@ For 2-player tests (Tron, menu mirror sync) you need **two phones**.
 ## Smoke test (run first, every time)
 
 - [ ] Device boots; OLED shows the menu (or attract screen if no phone connected).
+- [ ] **Vertical alignment:** menu/games sit flush against the top of the OLED — no blank band
+      at the top, and the bottom menu item (Tron) is fully visible, not clipped off the bottom.
 - [ ] Phone connects; status goes green; `welcome` assigns a player slot.
 - [ ] Serial monitor shows `WS client connected` and no resets/brownouts.
 
