@@ -41,11 +41,20 @@ static const uint8_t ICON_TRON[32] = {
     0x07,0xFE, 0x00,0x00, 0x00,0x00, 0x00,0x00,
 };
 
+// A brick wall above a paddle and ball.
+static const uint8_t ICON_BREAKOUT[32] = {
+    0x00,0x00, 0xFF,0xFE, 0xDB,0x6E, 0xFF,0xFE,
+    0x6D,0xB6, 0xFF,0xFE, 0x00,0x00, 0x00,0x00,
+    0x00,0x80, 0x01,0x00, 0x00,0x00, 0x00,0x00,
+    0x00,0x00, 0x0F,0xF0, 0x00,0x00, 0x00,0x00,
+};
+
 static inline const uint8_t *icon_for_id(const char *id)
 {
-    if (strcmp(id, "pong")  == 0) return ICON_PONG;
-    if (strcmp(id, "snake") == 0) return ICON_SNAKE;
-    if (strcmp(id, "racer") == 0) return ICON_RACER;
-    if (strcmp(id, "tron")  == 0) return ICON_TRON;
+    if (strcmp(id, "pong")     == 0) return ICON_PONG;
+    if (strcmp(id, "snake")    == 0) return ICON_SNAKE;
+    if (strcmp(id, "racer")    == 0) return ICON_RACER;
+    if (strcmp(id, "tron")     == 0) return ICON_TRON;
+    if (strcmp(id, "breakout") == 0) return ICON_BREAKOUT;
     return NULL;
 }

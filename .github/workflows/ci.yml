@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  host-tests:
+    name: host game-logic tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build & run unit tests
+        run: make -C test/host run
+
+  build:
+    name: firmware build (esp-idf v6.0 / esp32s3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: esp-idf build + size
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v6.0
+          target: esp32s3
+          path: '.'
+          command: idf.py set-target esp32s3 && idf.py build && idf.py size
+      - name: upload firmware + size map
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            build/*.bin
+            build/*.map
+          if-no-files-found: warn
+
+  format:
+    # Advisory until a one-time `clang-format -i` pass lands (the tree is currently
+    # hand-aligned and not fully conformant). Flip to a hard gate after that pass.
+    name: clang-format (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: install clang-format (pinned to match .clang-format Language: C)
+        run: pipx install clang-format==20.1.0 || pip install clang-format==20.1.0
+      - name: check formatting
+        run: |
+          clang-format --version
+          clang-format --dry-run --Werror main/*.c test/host/*.c

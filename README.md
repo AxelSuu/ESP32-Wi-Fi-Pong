@@ -23,14 +23,21 @@ your phone turns into the right control surface. No app install required.
 
 | Game  | Players | Controller            | How it plays |
 |-------|---------|-----------------------|--------------|
-| **Pong**  | 1 | Up / Down + Menu       | Classic paddle vs adaptive AI; first to 3 |
+| **Pong**  | 1–2 | Up / Down + Menu     | Classic paddle; vs adaptive AI, or a 2nd phone takes the right paddle; first to 3 |
 | **Snake** | 1 | 4-way arrows           | Eat food, grow, don't bite yourself or the walls |
 | **Racer** | 1 | Tilt (+ Left/Right)    | Top-down dodge-the-traffic; **tilt your phone** to steer |
 | **Tron**  | 2 | Left / Right turns     | Two light-cycles, two trail shades; last one riding wins |
+| **Breakout** | 1 | Tilt / Left / Right | Knock out the brick wall; 3 balls; clearing the board wins |
 
-Single-player games end on a crash (your score is your distance/length). Tron needs **two
-phones connected** — selecting it shows a "waiting for players" screen until the second
-phone joins, and a mid-round disconnect awards the round to the remaining rider.
+Single-player games end on a crash (your score is your distance/length/bricks) and the **high
+score per game is saved** (NVS) and shown on the game-over screen. Pong is single-player vs AI
+until a second phone connects, which takes over the right paddle. Tron needs **two phones
+connected** — selecting it shows a "waiting for players" screen until the second phone joins,
+and a mid-round disconnect awards the round to the remaining rider.
+
+The controller also shows **round-trip latency** in its footer, plays WebAudio blips, has a
+reconnect toast, and a **brightness** slider in the ⚙ menu (saved to NVS). Your last-played
+game is remembered across reboots.
 
 ## Hardware Requirements
 
@@ -57,11 +64,14 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
 1. **Power on** the ESP32 — it creates a Wi-Fi access point with a **per-unit SSID**
    (`GameBox-XXXX`, where `XXXX` is from the board's MAC; pw `12345678`), so two consoles in
    one room never collide. With no phone connected the OLED runs an **attract screen** that
-   names the exact AP and IP.
+   names the exact AP and address.
 2. **Connect** your phone/laptop to that network. The OLED switches to the game menu — each
    game has its own icon, the selected row is highlighted, and a footer dot shows each phone.
-3. **Open a browser** at `http://192.168.4.1`.
-4. **Navigate the menu** with Up/Down + SELECT on the phone; the OLED highlights the choice.
+3. **Open a browser** at **`http://gamebox.local`** (advertised over mDNS), or
+   `http://192.168.4.1` as a fallback. `.local` resolves out of the box on iOS/macOS and
+   most modern Android; on Windows it needs Bonjour.
+4. **Navigate the menu** with Up/Down + SELECT — the phone mirrors the OLED's game list and
+   highlights your choice in step with the screen.
 5. **Play!** The phone swaps to that game's controls automatically. MENU returns you.
 
 ## Architecture
@@ -76,7 +86,7 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
                  └───────┬───────────────────────────┬────────────┘
                          │ game_module_t vtable        │ gfx_* primitives
         ┌────────────────┴────────────┐        ┌───────┴───────────────┐
-        │ pong / snake / racer / tron  │  draws │   display.c (gfx_*)    │
+        │ pong/snake/racer/tron/breakout│ draws │   display.c (gfx_*)    │
         │ each owns its state file-     │ ─────► │  SSD1327 driver + FB   │
         │ static; no global game struct │        │  (no game knowledge)   │
         └────────────────▲─────────────┘        └────────────────────────┘
@@ -114,17 +124,25 @@ Small flat JSON over `/ws`. `t` = message type.
 | `select` | —                          | launch highlighted game / play again |
 | `back`   | —                          | return to menu / dismiss game-over |
 | `input`  | `ev`: `up`/`down`/`left`/`right`/`primary` | discrete game input |
-| `tilt`   | `g`: float (degrees)       | analog steering (Racer) |
+| `tilt`   | `g`: float (degrees)       | analog steering (Racer, Breakout) |
+| `ping`   | `ts`: client epoch-ms      | latency probe; server echoes `pong` |
+| `brightness` | `v`: 0–255, `save`: 0/1 | set OLED contrast (`save:1` on release → NVS) |
 
 **Server → Client**
+
+Every server→client message also carries `v`: the wire **schema version**
+(`PROTO_SCHEMA_VERSION`, currently `1`) as its first field, so a client can reject a protocol
+it doesn't understand. Clients ignore unknown fields, so additive changes don't bump it.
 
 | `t` | Fields | Meaning |
 |-----|--------|---------|
 | `welcome` | `player`: 0/1                       | assigned player slot |
+| `system_info` | `version`: string               | firmware version (sent right after `welcome`) |
 | `screen`  | `mode`:`menu`, `games`:[labels], `idx`:n | menu state → **phone mirrors the OLED menu** |
 | `active`  | `game`: id, `players`: n            | a game launched → **phone morphs its controls** |
 | `waiting` | `need`: n, `have`: n                | 2-player game waiting for the second phone |
 | `over`    | `winner`: -1/0/1, `score`: int      | round ended (`winner` -1 = none/draw; `score` -1 = n/a) |
+| `pong`    | `ts`: echoed timestamp              | reply to `ping`; client computes round-trip latency |
 
 The `active` message drives the controller morph — the phone JS swaps its control surface
 based on `game`. The `screen` message mirrors the on-device menu so the phone shows the live
@@ -148,6 +166,21 @@ an exponential-backoff reconnect and buzzes (`navigator.vibrate`) on input and r
 The web controller (`spiffs_image/index.html`) is packed into the `storage` SPIFFS
 partition automatically during the build.
 
+## Testing
+
+On-hardware acceptance is the manual matrix in [`TEST_PLAN.md`](TEST_PLAN.md). The pure-C
+logic also has **host unit tests** that need no ESP32 — they exercise
+`snake/tron/pong/breakout` against a stubbed `display.h`, plus the WS wire protocol
+(`proto.c`: JSON parser + message formatters):
+
+```bash
+make -C test/host run
+```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs those host tests, an
+`esp-idf v6.0 / esp32s3` build with a size/firmware artifact, and an advisory
+`clang-format` check (see [`.clang-format`](.clang-format)).
+
 ## Updating firmware (OTA)
 
 The flash uses a **dual-slot OTA partition table** (`ota_0` / `ota_1` / `otadata` in
@@ -158,8 +191,13 @@ The flash uses a **dual-slot OTA partition table** (`ota_0` / `ota_1` / `otadata
    **FLASH**. The phone POSTs it to `/update`; the device streams it into the inactive OTA
    slot, marks it bootable, and reboots into the new image. The controller then reconnects.
 
-A bad/truncated upload is rejected (`image invalid`) and the currently-running slot is left
-untouched. The first USB flash still uses `idf.py flash`.
+**Safety:** a corrupt/truncated upload is rejected (`image invalid`) and a `.bin` built from a
+different project is rejected (`wrong firmware (project mismatch)`) — in both cases the running
+slot is left untouched. A wrong-chip image is caught by the image header. And with **rollback**
+enabled, a freshly flashed image boots in *pending-verify*: it's only made permanent after the
+firmware runs healthily for a few seconds; an image that hangs or crashes before then is
+**automatically reverted** to the previous slot on reboot. The first USB flash still uses
+`idf.py flash`.
 
 ## Tilt on iOS
 

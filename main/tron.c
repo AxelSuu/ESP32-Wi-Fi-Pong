@@ -8,8 +8,8 @@
 #define ROWS    (SCREEN_HEIGHT / CELL)   // 24
 #define STEP_MS 90
 
-// Grayscale shade per player trail (the panel earns its keep here).
-static const uint8_t PLAYER_SHADE[2] = { 0xF, 0x8 };
+// Trail shade per player (kept below 0xF so the bright heads stand out).
+static const uint8_t PLAYER_SHADE[2] = { 0xA, 0x6 };
 
 typedef struct { int x, y, dx, dy; bool alive; } cycle_t;
 
@@ -103,6 +103,14 @@ static void tron_render(void)
             if (c)
                 gfx_rect(x * CELL, y * CELL, CELL - 1, CELL - 1, PLAYER_SHADE[c - 1]);
         }
+
+    // Bright heads with a halo so each rider's leading edge is obvious.
+    for (int i = 0; i < 2; i++) {
+        if (!s_p[i].alive) continue;
+        int hx = s_p[i].x * CELL, hy = s_p[i].y * CELL;
+        gfx_rect(hx, hy, CELL - 1, CELL - 1, 0xF);
+        gfx_frame(hx - 1, hy - 1, CELL + 1, CELL + 1, 0xF);
+    }
 }
 
 static bool tron_is_over(void) { return s_over; }

@@ -1,5 +1,6 @@
 #include "racer.h"
 #include "display.h"
+#include "fx.h"
 #include "hw_config.h"
 #include "esp_random.h"
 #include <stdio.h>
@@ -90,6 +91,7 @@ static void racer_tick(uint32_t dt_ms)
         if (s_obst[i].y > SCREEN_HEIGHT) { s_obst[i].active = false; continue; }
         if (overlap(s_car_x, s_car_y, CAR_W, CAR_H,
                     s_obst[i].x, s_obst[i].y, s_obst[i].w, OBST_H)) {
+            fx_spark(s_car_x + CAR_W / 2, s_car_y + CAR_H / 2);
             s_over = true;
             return;
         }
@@ -107,14 +109,25 @@ static void racer_render(void)
     gfx_rect(0, 0, 2, SCREEN_HEIGHT, 0x6);                 // left edge
     gfx_rect(SCREEN_WIDTH - 2, 0, 2, SCREEN_HEIGHT, 0x6);  // right edge
 
+    // Faint scrolling speed streaks for a sense of motion.
+    int streak = 6 + s_speed;
+    for (int x = 18; x < SCREEN_WIDTH - 4; x += 30)
+        for (int y = (s_lane_off * 2) % 24 - 24; y < SCREEN_HEIGHT; y += 24)
+            gfx_vline(x, y, streak, 0x3);
+
     for (int y = s_lane_off - 16; y < SCREEN_HEIGHT; y += 16)
-        gfx_rect(SCREEN_WIDTH / 2 - 1, y, 2, 8, 0x5);      // center lane dashes
+        gfx_rect(SCREEN_WIDTH / 2 - 1, y, 2, 8, 0x6);      // center lane dashes
 
+    // Obstacles drawn as outlined cars (distinct from the solid player car).
     for (int i = 0; i < OBST_MAX; i++)
-        if (s_obst[i].active)
-            gfx_rect(s_obst[i].x, s_obst[i].y, s_obst[i].w, OBST_H, 0x9);
+        if (s_obst[i].active) {
+            gfx_rect(s_obst[i].x, s_obst[i].y, s_obst[i].w, OBST_H, 0x7);
+            gfx_frame(s_obst[i].x, s_obst[i].y, s_obst[i].w, OBST_H, 0xF);
+        }
 
-    gfx_rect(s_car_x, s_car_y, CAR_W, CAR_H, 0xF);         // player car
+    // Player car: bright body with a dark cockpit.
+    gfx_rect(s_car_x, s_car_y, CAR_W, CAR_H, 0xF);
+    gfx_rect(s_car_x + 3, s_car_y + 3, CAR_W - 6, CAR_H - 7, 0x0);
 
     char s[16];
     snprintf(s, sizeof s, "%ld", s_score / 10);

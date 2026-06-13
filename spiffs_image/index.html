@@ -101,6 +101,19 @@
     #ota button { min-height: 56px; padding: 0 24px; }
     #otafile { color: #cdd8ea; font-size: 15px; }
     #ustatus { font-size: 14px; color: #9fb0cc; min-height: 18px; text-align: center; }
+    #curver { font-size: 13px; color: #6b7790; }
+    #fwver {
+      position: fixed; bottom: 4px; left: 0; right: 0; text-align: center;
+      font-size: 11px; letter-spacing: 1px; color: #46506a; z-index: 1; pointer-events: none;
+    }
+    #toast {
+      position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+      background: rgba(20,26,43,.95); border: 1px solid var(--cyan); color: #eaf6ff;
+      padding: 10px 18px; border-radius: 12px; font-size: 14px; letter-spacing: 1px;
+      box-shadow: 0 0 16px rgba(41,240,255,.4); opacity: 0; transition: opacity .25s;
+      pointer-events: none; z-index: 6; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
   </style>
 </head>
 <body>
@@ -114,15 +127,21 @@
   <div id="ota">
     <h2>FIRMWARE UPDATE</h2>
     <div class="sub">Upload a new <code>.bin</code> over Wi-Fi.<br>The console reboots when done.</div>
+    <div id="curver"></div>
     <input id="otafile" type="file" accept=".bin">
     <button class="primary" onclick="flash()">FLASH</button>
     <div id="ustatus"></div>
+    <div class="sub" style="margin-top:8px;">BRIGHTNESS</div>
+    <input id="bright" type="range" min="0" max="255" value="128"
+           oninput="setBrightness(this.value, 0)" onchange="setBrightness(this.value, 1)"
+           style="width:80%;">
     <button class="pill warn" onclick="toggleOta(false)">CLOSE</button>
   </div>
 
   <main>
     <!-- MENU (mirrors the OLED via the "screen" message) -->
     <div class="surface" data-mode="menu">
+      <div class="menulist" id="menulist"></div>
       <div class="row">
         <button class="accent" onclick="nav(-1)">&#9650;</button>
         <button class="accent" onclick="nav(1)">&#9660;</button>
@@ -151,7 +170,17 @@
     <!-- RACER -->
     <div class="surface" data-mode="racer">
       <div id="tiltbar"><div id="tiltdot"></div></div>
-      <button class="primary" id="tiltbtn" onclick="enableTilt()">ENABLE TILT</button>
+      <button class="primary tilt-toggle" onclick="enableTilt()">ENABLE TILT</button>
+      <div class="row">
+        <button class="accent" onclick="press('left')">&#9664;</button>
+        <button class="accent" onclick="press('right')">&#9654;</button>
+      </div>
+      <button class="pill warn" onclick="back()">MENU</button>
+    </div>
+
+    <!-- BREAKOUT -->
+    <div class="surface" data-mode="breakout">
+      <button class="primary tilt-toggle" onclick="enableTilt()">ENABLE TILT</button>
       <div class="row">
         <button class="accent" onclick="press('left')">&#9664;</button>
         <button class="accent" onclick="press('right')">&#9654;</button>
@@ -187,11 +216,47 @@
     </div>
   </main>
 
+  <div id="fwver"></div>
+  <div id="toast"></div>
+
   <script>
     let socket, player = 0, mode = 'menu';
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 10;
     const statusEl = document.getElementById('status');
+
+    // --- audio blips (WebAudio; context created lazily on first gesture) ---
+    let actx;
+    function beep(freq, ms, type) {
+      try {
+        if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = type || 'square'; o.frequency.value = freq;
+        o.connect(g); g.connect(actx.destination);
+        const t0 = actx.currentTime;
+        g.gain.setValueAtTime(0.05, t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+        o.start(t0); o.stop(t0 + ms / 1000);
+      } catch (e) {}
+    }
+
+    // --- transient toast (reconnect notices) ---
+    let toastTimer;
+    function showToast(msg, ms) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastTimer);
+      if (ms) toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+    }
+    function hideToast() { document.getElementById('toast').classList.remove('show'); }
+
+    // --- footer: firmware version + measured round-trip latency ---
+    let fwVersion = '', lastPing = null;
+    function updateFooter() {
+      document.getElementById('fwver').textContent =
+        (fwVersion ? 'fw ' + fwVersion : '') +
+        (lastPing != null ? '  ·  ' + lastPing + ' ms' : '');
+    }
 
     function setSurface(m) {
       mode = m;
@@ -221,16 +286,26 @@
         }))
         .catch(() => { st.textContent = 'Upload error — check Wi-Fi'; });
     }
-    function nav(d)    { send({ t: 'nav', dir: d }); }
-    function select()  { send({ t: 'select' }); }
-    function back()    { send({ t: 'back' }); setSurface('menu'); }
-    function press(ev) { send({ t: 'input', ev: ev }); if (navigator.vibrate) navigator.vibrate(12); }
+    function nav(d)    { send({ t: 'nav', dir: d }); beep(520, 25); }
+    function select()  { send({ t: 'select' }); beep(700, 40); }
+    function back()    { send({ t: 'back' }); setSurface('menu'); beep(360, 30); }
+    function press(ev) { send({ t: 'input', ev: ev }); beep(660, 30); if (navigator.vibrate) navigator.vibrate(12); }
     function sendTilt(g) { send({ t: 'tilt', g: Math.round(g * 100) / 100 }); }
+    function setBrightness(v, save) { send({ t: 'brightness', v: Number(v), save: save ? 1 : 0 }); }
 
-    // --- menu mirror ---
+    // --- menu mirror: draw the live game list with the highlighted row ---
     function renderMenu(games, idx) {
-      void games;
-      void idx;
+      const list = document.getElementById('menulist');
+      if (!list || !Array.isArray(games)) return;
+      list.innerHTML = '';
+      games.forEach((name, i) => {
+        const row = document.createElement('div');
+        row.className = 'menu-item' + (i === idx ? ' sel' : '');
+        const label = document.createElement('span');
+        label.textContent = name;
+        row.appendChild(label);
+        list.appendChild(row);
+      });
     }
 
     // --- tilt (DeviceOrientation) ---
@@ -248,7 +323,7 @@
       if (tiltArmed) return;
       tiltArmed = true;
       window.addEventListener('deviceorientation', onOrient);
-      document.getElementById('tiltbtn').textContent = 'TILT ON';
+      document.querySelectorAll('.tilt-toggle').forEach(b => b.textContent = 'TILT ON');
     }
     function enableTilt() {
       if (typeof DeviceOrientationEvent !== 'undefined' &&
@@ -266,6 +341,13 @@
       try { m = JSON.parse(data); } catch (e) { return; }
       switch (m.t) {
         case 'welcome': player = m.player; break;
+        case 'system_info':
+          fwVersion = m.version; updateFooter();
+          document.getElementById('curver').textContent = 'Current: ' + m.version;
+          break;
+        case 'pong':
+          lastPing = Math.max(0, Date.now() - m.ts); updateFooter();
+          break;
         case 'screen':
           renderMenu(m.games, m.idx);
           setSurface('menu');
@@ -285,11 +367,14 @@
             (m.score >= 0) ? 'Score: ' + m.score : '';
           setSurface('gameover');
           if (navigator.vibrate) navigator.vibrate(won ? [40, 40, 80] : 60);
+          if (m.winner < 0 || won) { beep(740, 90); setTimeout(() => beep(990, 140), 110); }
+          else beep(200, 220);
           break;
         }
       }
     }
 
+    let pingTimer = null, hadDrop = false;
     function connect() {
       socket = new WebSocket("ws://" + location.hostname + "/ws");
       socket.onopen = () => {
@@ -297,17 +382,28 @@
         statusEl.className = "connected";
         reconnectAttempts = 0;
         send({ t: 'hello' });
+        if (hadDrop) { showToast('Reconnected', 1500); hadDrop = false; }
+        else hideToast();
+        // Measure round-trip latency every 2 s (shown in the footer).
+        clearInterval(pingTimer);
+        send({ t: 'ping', ts: Date.now() });
+        pingTimer = setInterval(() => send({ t: 'ping', ts: Date.now() }), 2000);
       };
       socket.onmessage = (e) => onMessage(e.data);
       socket.onclose = () => {
         statusEl.textContent = "DISCONNECTED — RECONNECTING…";
         statusEl.className = "disconnected";
+        clearInterval(pingTimer);
+        lastPing = null; updateFooter();
         if (reconnectAttempts < maxReconnectAttempts) {
+          hadDrop = true;
+          showToast('Reconnecting…');
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
           reconnectAttempts++;
           setTimeout(connect, delay);
         } else {
           statusEl.textContent = "CONNECTION FAILED — REFRESH PAGE";
+          showToast('Connection failed — refresh', 0);
         }
       };
       socket.onerror = () => {};

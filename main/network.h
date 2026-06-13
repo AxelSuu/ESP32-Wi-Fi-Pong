@@ -3,7 +3,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
-#define NETWORK_READY_BIT BIT0
+#define NETWORK_READY_BIT  BIT0   // SoftAP up + HTTP server started
+#define NETWORK_FAILED_BIT BIT1   // bring-up failed; engine shows a degraded screen
 
 extern EventGroupHandle_t net_event_group;
 

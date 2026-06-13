@@ -1,5 +1,6 @@
 #include "snake.h"
 #include "display.h"
+#include "fx.h"
 #include "hw_config.h"
 #include "esp_random.h"
 #include <stdio.h>
@@ -82,6 +83,7 @@ static void step(void)
     s_body[0].y = ny;
     if (grow && s_len < MAX_CELLS) {
         s_len++;
+        fx_spark(nx * CELL + CELL / 2, ny * CELL + CELL / 2);
         place_food();
     }
 }
@@ -97,11 +99,25 @@ static void snake_tick(uint32_t dt_ms)
     }
 }
 
+static uint32_t s_frame;
+
 static void snake_render(void)
 {
-    gfx_rect(s_food.x * CELL, s_food.y * CELL, CELL - 1, CELL - 1, 0x8);   // food (dim)
-    for (int i = 0; i < s_len; i++)
-        gfx_rect(s_body[i].x * CELL, s_body[i].y * CELL, CELL - 1, CELL - 1, 0xF);
+    s_frame++;
+
+    // Pulsing food.
+    uint8_t food_shade = ((s_frame / 8) & 1) ? 0xF : 0x6;
+    gfx_rect(s_food.x * CELL, s_food.y * CELL, CELL - 1, CELL - 1, food_shade);
+
+    // Body (slightly dimmer than the head so the head reads).
+    for (int i = 1; i < s_len; i++)
+        gfx_rect(s_body[i].x * CELL, s_body[i].y * CELL, CELL - 1, CELL - 1, 0xC);
+
+    // Head: bright, with two dark "eyes".
+    int hx = s_body[0].x * CELL, hy = s_body[0].y * CELL;
+    gfx_rect(hx, hy, CELL - 1, CELL - 1, 0xF);
+    gfx_pixel(hx + 1, hy + 1, 0x0);
+    gfx_pixel(hx + CELL - 3, hy + 1, 0x0);
 
     char s[12];
     snprintf(s, sizeof s, "%d", s_len - START_LEN);

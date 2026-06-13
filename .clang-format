@@ -1,0 +1,22 @@
+# Approximates the existing firmware style: 4-space indent, ~96 col, function
+# braces on their own line (control-statement braces attached), heavy column
+# alignment of assignments/declarations, short bodies kept on one line.
+Language: C
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 96
+BreakBeforeBraces: Linux
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveMacros: Consecutive
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+KeepEmptyLinesAtTheStartOfBlocks: false
+SortIncludes: Never

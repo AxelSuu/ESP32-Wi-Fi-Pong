@@ -1,5 +1,6 @@
 #include "pong.h"
 #include "display.h"
+#include "fx.h"
 #include "hw_config.h"
 #include <stdio.h>
 #include "esp_timer.h"
@@ -33,6 +34,7 @@ static paddle_t s_enemy;
 static ball_t   s_ball;
 static int      s_player_score;
 static int      s_enemy_score;
+static bool     s_p1_joined;     // a 2nd phone took the right paddle → AI off
 
 static int64_t  s_last_speed_increase;
 static int64_t  s_last_ai_update;
@@ -59,6 +61,7 @@ static void pong_reset(void)
     s_enemy  = (paddle_t){SCREEN_WIDTH - 9, 30, PADDLE_WIDTH, PADDLE_HEIGHT};
     s_player_score = 0;
     s_enemy_score  = 0;
+    s_p1_joined    = false;
     reset_ball();
     int64_t t             = now_ms();
     s_last_speed_increase = t;
@@ -70,11 +73,20 @@ static void pong_reset(void)
 
 static void pong_on_input(const input_event_t *ev)
 {
-    if (ev->player != 0) return;          // Pong: only player 0 controls
-    if (ev->kind == INPUT_UP)   s_player.y -= PADDLE_SPEED;
-    if (ev->kind == INPUT_DOWN) s_player.y += PADDLE_SPEED;
-    if (s_player.y < 0) s_player.y = 0;
-    if (s_player.y + s_player.h > SCREEN_HEIGHT) s_player.y = SCREEN_HEIGHT - s_player.h;
+    // Player 0 drives the left paddle; player 1 (a 2nd phone) takes the right
+    // paddle and switches the AI off. With one phone the AI plays the right side.
+    if (ev->player == 0) {
+        if (ev->kind == INPUT_UP)   s_player.y -= PADDLE_SPEED;
+        if (ev->kind == INPUT_DOWN) s_player.y += PADDLE_SPEED;
+        if (s_player.y < 0) s_player.y = 0;
+        if (s_player.y + s_player.h > SCREEN_HEIGHT) s_player.y = SCREEN_HEIGHT - s_player.h;
+    } else if (ev->player == 1) {
+        s_p1_joined = true;
+        if (ev->kind == INPUT_UP)   s_enemy.y -= PADDLE_SPEED;
+        if (ev->kind == INPUT_DOWN) s_enemy.y += PADDLE_SPEED;
+        if (s_enemy.y < 0) s_enemy.y = 0;
+        if (s_enemy.y + s_enemy.h > SCREEN_HEIGHT) s_enemy.y = SCREEN_HEIGHT - s_enemy.h;
+    }
 }
 
 static bool pong_is_over(void)
@@ -92,6 +104,18 @@ static int pong_winner(void)
 static int pong_score(void)
 {
     return -1;
+}
+
+// Deflect the ball off a paddle: the vertical speed depends on where it hit,
+// so the player can aim instead of every rally being a straight reflection.
+static int deflect(int ball_y, const paddle_t *p)
+{
+    int off = ball_y - (p->y + p->h / 2);   // -h/2 .. h/2
+    int dy  = off / 4;
+    if (dy > 3)  dy = 3;
+    if (dy < -3) dy = -3;
+    if (dy == 0) dy = (off < 0) ? -1 : 1;    // always a little english
+    return dy;
 }
 
 static void pong_tick(uint32_t dt_ms)
@@ -120,6 +144,7 @@ static void pong_tick(uint32_t dt_ms)
         s_ball.y <= s_player.y + s_player.h &&
         s_ball.dx < 0) {
         s_ball.dx *= -1;
+        s_ball.dy = deflect(s_ball.y, &s_player);
     }
 
     // Enemy paddle collision
@@ -128,42 +153,48 @@ static void pong_tick(uint32_t dt_ms)
         s_ball.y <= s_enemy.y + s_enemy.h &&
         s_ball.dx > 0) {
         s_ball.dx *= -1;
+        s_ball.dy = deflect(s_ball.y, &s_enemy);
     }
 
     // Scoring
     if (s_ball.x < 0) {
         s_enemy_score++;
+        fx_spark(0, s_ball.y);
         if (s_enemy_score >= WIN_SCORE) return;   // engine moves to game-over
         reset_ball();
         s_last_speed_increase = now_ms();
     } else if (s_ball.x > SCREEN_WIDTH) {
         s_player_score++;
+        fx_spark(SCREEN_WIDTH, s_ball.y);
         if (s_player_score >= WIN_SCORE) return;
         reset_ball();
         s_last_speed_increase = now_ms();
     }
 
-    // AI decision update
-    if (now - s_last_ai_update > (int64_t)s_ai_reaction_delay) {
-        s_last_ai_update    = now;
-        s_ai_reaction_delay = AI_MIN_REACTION_DELAY +
-                              (int)(esp_random() % (AI_MAX_REACTION_DELAY - AI_MIN_REACTION_DELAY));
-        s_ai_target_offset  = (int)(esp_random() % (2 * AI_TARGET_OFFSET_RANGE + 1)) - AI_TARGET_OFFSET_RANGE;
-    }
-
-    // AI movement (only when ball approaches)
-    if (s_ball.dx > 0) {
-        int enemy_center = s_enemy.y + s_enemy.h / 2;
-        int target_y     = s_ball.y + s_ai_target_offset;
-
-        if (target_y < enemy_center - 3) {
-            s_enemy.y -= AI_MOVE_SPEED;
-        } else if (target_y > enemy_center + 3) {
-            s_enemy.y += AI_MOVE_SPEED;
+    // AI drives the right paddle only while no 2nd phone has taken it.
+    if (!s_p1_joined) {
+        // AI decision update
+        if (now - s_last_ai_update > (int64_t)s_ai_reaction_delay) {
+            s_last_ai_update    = now;
+            s_ai_reaction_delay = AI_MIN_REACTION_DELAY +
+                                  (int)(esp_random() % (AI_MAX_REACTION_DELAY - AI_MIN_REACTION_DELAY));
+            s_ai_target_offset  = (int)(esp_random() % (2 * AI_TARGET_OFFSET_RANGE + 1)) - AI_TARGET_OFFSET_RANGE;
         }
 
-        if ((int)(esp_random() % 100) < AI_MISTAKE_CHANCE) {
-            s_enemy.y += (int)(esp_random() % 13) - 6;
+        // AI movement (only when ball approaches)
+        if (s_ball.dx > 0) {
+            int enemy_center = s_enemy.y + s_enemy.h / 2;
+            int target_y     = s_ball.y + s_ai_target_offset;
+
+            if (target_y < enemy_center - 3) {
+                s_enemy.y -= AI_MOVE_SPEED;
+            } else if (target_y > enemy_center + 3) {
+                s_enemy.y += AI_MOVE_SPEED;
+            }
+
+            if ((int)(esp_random() % 100) < AI_MISTAKE_CHANCE) {
+                s_enemy.y += (int)(esp_random() % 13) - 6;
+            }
         }
     }
 
@@ -176,20 +207,19 @@ static void pong_tick(uint32_t dt_ms)
 
 static void pong_render(void)
 {
+    // Dashed center net (dim, behind play).
+    for (int y = 0; y < SCREEN_HEIGHT; y += 6) gfx_vline(SCREEN_WIDTH / 2, y, 3, 0x5);
+
+    // Big bold scores either side of the net.
+    char s[4];
+    snprintf(s, sizeof(s), "%d", s_player_score);
+    gfx_text_scaled(SCREEN_WIDTH / 2 - 28, 2, s, 0xC, 2);
+    snprintf(s, sizeof(s), "%d", s_enemy_score);
+    gfx_text_scaled(SCREEN_WIDTH / 2 + 18, 2, s, 0xC, 2);
+
     gfx_rect(s_player.x, s_player.y, s_player.w, s_player.h, 0xF);
     gfx_rect(s_enemy.x,  s_enemy.y,  s_enemy.w,  s_enemy.h,  0xF);
     gfx_circle(s_ball.x, s_ball.y, s_ball.r, 0xF);
-
-    char s[4];
-    snprintf(s, sizeof(s), "%d", s_player_score);
-    gfx_text(30, 5, s, 0xF);
-    snprintf(s, sizeof(s), "%d", s_enemy_score);
-    gfx_text(90, 5, s, 0xF);
-
-    // Dashed center line
-    for (int y = 0; y < SCREEN_HEIGHT; y += 4) {
-        gfx_pixel(SCREEN_WIDTH / 2, y, 0xF);
-    }
 }
 
 const game_module_t PONG = {

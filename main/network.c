@@ -2,6 +2,7 @@
 #include "net_config.h"
 #include "engine.h"
 #include "game_module.h"
+#include "proto.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,12 +16,26 @@
 #include "esp_spiffs.h"
 #include "esp_system.h"
 #include "esp_ota_ops.h"
+#include "esp_app_desc.h"
+#include "mdns.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
 #define WS_RX_BUF_SIZE 128
+
+// Socket budget. Three related ceilings:
+//   WIFI_MAX_CONN     (net_config.h) — stations the SoftAP will associate.
+//   MAX_WS_CLIENTS    (net_config.h) — player slots = long-lived WS sockets.
+//   HTTPD_MAX_SOCKETS (here)         — httpd's total fd table.
+// Each WS client holds one socket for its whole session; HTTP GET / and
+// POST /update need a few more short-lived sockets on top. So the invariant is
+// MAX_WS_CLIENTS + (HTTP control headroom) <= HTTPD_MAX_SOCKETS, and a station
+// can associate (WIFI_MAX_CONN) without necessarily owning a WS slot.
+#define HTTPD_MAX_SOCKETS 7
+_Static_assert(MAX_WS_CLIENTS + 2 <= HTTPD_MAX_SOCKETS,
+               "httpd needs socket headroom for HTTP control beyond the WS clients");
 
 static const char *TAG = "network";
 
@@ -179,62 +194,22 @@ void net_broadcast_json(const char *json)
 void net_broadcast_active(const char *game_id, int players)
 {
     char buf[64];
-    snprintf(buf, sizeof buf, "{\"t\":\"active\",\"game\":\"%s\",\"players\":%d}",
-             game_id, players);
+    proto_fmt_active(buf, sizeof buf, game_id, players);
     ws_broadcast(buf);
 }
 
 void net_broadcast_waiting(int need, int have)
 {
     char buf[48];
-    snprintf(buf, sizeof buf, "{\"t\":\"waiting\",\"need\":%d,\"have\":%d}", need, have);
+    proto_fmt_waiting(buf, sizeof buf, need, have);
     ws_broadcast(buf);
 }
 
 void net_broadcast_over(int winner, int score)
 {
     char buf[56];
-    snprintf(buf, sizeof buf, "{\"t\":\"over\",\"winner\":%d,\"score\":%d}",
-             winner, score);
+    proto_fmt_over(buf, sizeof buf, winner, score);
     ws_broadcast(buf);
-}
-
-// --- tiny JSON field extractors for our flat, trusted schema ---
-
-// find "key": then return pointer just past the colon (skipping spaces), or NULL.
-static const char *json_value(const char *msg, const char *key)
-{
-    char pat[20];
-    snprintf(pat, sizeof pat, "\"%s\"", key);
-    const char *p = strstr(msg, pat);
-    if (!p) return NULL;
-    p = strchr(p + strlen(pat), ':');
-    if (!p) return NULL;
-    p++;
-    while (*p == ' ' || *p == '\t') p++;
-    return p;
-}
-
-static bool json_find_str(const char *msg, const char *key, char *out, size_t cap)
-{
-    const char *p = json_value(msg, key);
-    if (!p || *p != '"') return false;
-    p++;
-    size_t i = 0;
-    while (*p && *p != '"' && i < cap - 1) out[i++] = *p++;
-    out[i] = '\0';
-    return true;
-}
-
-static bool json_find_num(const char *msg, const char *key, double *out)
-{
-    const char *p = json_value(msg, key);
-    if (!p) return false;
-    char *end = NULL;
-    double v = strtod(p, &end);
-    if (end == p) return false;
-    *out = v;
-    return true;
 }
 
 // --- WebSocket handler ---
@@ -265,26 +240,60 @@ static esp_err_t ws_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
+    // Our controller protocol uses tiny payloads; a frame that fills the buffer
+    // is malformed. Drop it explicitly rather than truncate-and-parse a partial
+    // frame — the browser client auto-reconnects if the stream ever desyncs.
+    if (ws_pkt.len >= WS_RX_BUF_SIZE) {
+        ESP_LOGW(TAG, "WS frame too large (%u bytes) — dropping", (unsigned)ws_pkt.len);
+        return ESP_OK;
+    }
+
     uint8_t buf[WS_RX_BUF_SIZE] = {0};
-    ws_pkt.payload  = buf;
-    size_t recv_len = ws_pkt.len < sizeof(buf) - 1 ? ws_pkt.len : sizeof(buf) - 1;
-    ret = httpd_ws_recv_frame(req, &ws_pkt, recv_len);
+    ws_pkt.payload = buf;
+    ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);   // len < WS_RX_BUF_SIZE, fits
     if (ret != ESP_OK) return ret;
 
     if (ws_pkt.type != HTTPD_WS_TYPE_TEXT) return ESP_OK;
 
     char *msg = (char *)buf;
     char t[16];
-    if (!json_find_str(msg, "t", t, sizeof t)) return ESP_OK;
+    if (!proto_find_str(msg, "t", t, sizeof t)) return ESP_OK;
 
     int player = slot_of_fd(fd);
     if (player < 0) player = 0;
 
     if (strcmp(t, "hello") == 0) {
         char w[40];
-        snprintf(w, sizeof w, "{\"t\":\"welcome\",\"player\":%d}", player);
+        proto_fmt_welcome(w, sizeof w, player);
         ws_send_one(fd, w);
+        // Tell the client which firmware it's talking to (version = app descriptor,
+        // auto-derived from git describe unless PROJECT_VER is set).
+        char si[80];
+        proto_fmt_system_info(si, sizeof si, esp_app_get_description()->version);
+        ws_send_one(fd, si);
         engine_on_player_connect(player);
+        return ESP_OK;
+    }
+
+    // Latency probe: echo the client's timestamp straight back.
+    if (strcmp(t, "ping") == 0) {
+        double ts = 0;
+        proto_find_num(msg, "ts", &ts);
+        char p[48];
+        proto_fmt_pong(p, sizeof p, ts);
+        ws_send_one(fd, p);
+        return ESP_OK;
+    }
+
+    // Display brightness from the ⚙ menu (0..255). "save":1 (slider release)
+    // persists to NVS; live drags (save 0/absent) only apply.
+    if (strcmp(t, "brightness") == 0) {
+        double v;
+        if (proto_find_num(msg, "v", &v)) {
+            double save = 0;
+            proto_find_num(msg, "save", &save);
+            engine_set_brightness((int)v, (int)save);
+        }
         return ESP_OK;
     }
 
@@ -292,7 +301,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
     if (strcmp(t, "nav") == 0) {
         double d = 1;
-        json_find_num(msg, "dir", &d);
+        proto_find_num(msg, "dir", &d);
         ev.kind = INPUT_NAV;
         ev.analog = (float)d;
     } else if (strcmp(t, "select") == 0) {
@@ -301,10 +310,10 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ev.kind = INPUT_BACK;
     } else if (strcmp(t, "tilt") == 0) {
         double g;
-        if (json_find_num(msg, "g", &g)) { ev.kind = INPUT_TILT; ev.analog = (float)g; }
+        if (proto_find_num(msg, "g", &g)) { ev.kind = INPUT_TILT; ev.analog = (float)g; }
     } else if (strcmp(t, "input") == 0) {
         char e[12];
-        if (json_find_str(msg, "ev", e, sizeof e)) {
+        if (proto_find_str(msg, "ev", e, sizeof e)) {
             if      (strcmp(e, "up") == 0)      ev.kind = INPUT_UP;
             else if (strcmp(e, "down") == 0)    ev.kind = INPUT_DOWN;
             else if (strcmp(e, "left") == 0)    ev.kind = INPUT_LEFT;
@@ -376,9 +385,28 @@ static esp_err_t update_handler(httpd_req_t *req)
     }
 
     if (esp_ota_end(ota) != ESP_OK) {
+        // esp_ota_end validates the image header (magic + chip target), so a
+        // wrong-chip .bin is already rejected here.
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "image invalid");
         return ESP_FAIL;
     }
+
+    // Guard against flashing a right-chip but wrong-project image: compare the
+    // new image's app descriptor project name to the running firmware's. The
+    // slot holds the image but stays unbootable (we never set_boot) on mismatch.
+    esp_app_desc_t new_desc;
+    if (esp_ota_get_partition_description(part, &new_desc) == ESP_OK) {
+        const esp_app_desc_t *cur = esp_app_get_description();
+        if (strncmp(new_desc.project_name, cur->project_name,
+                    sizeof new_desc.project_name) != 0) {
+            ESP_LOGE(TAG, "OTA rejected: project '%s' != '%s'",
+                     new_desc.project_name, cur->project_name);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                "wrong firmware (project mismatch)");
+            return ESP_FAIL;
+        }
+    }
+
     if (esp_ota_set_boot_partition(part) != ESP_OK) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "set boot failed");
         return ESP_FAIL;
@@ -391,16 +419,16 @@ static esp_err_t update_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-static void start_webserver(void)
+static bool start_webserver(void)
 {
     httpd_config_t config    = HTTPD_DEFAULT_CONFIG();
-    config.max_open_sockets  = 7;
+    config.max_open_sockets  = HTTPD_MAX_SOCKETS;
     config.lru_purge_enable  = true;       // reclaim the oldest socket when full
     config.close_fn          = ws_close_fn; // clear player slots on any disconnect
 
     if (httpd_start(&s_server, &config) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start httpd");
-        return;
+        return false;
     }
 
     httpd_uri_t uri_index = {
@@ -426,6 +454,24 @@ static void start_webserver(void)
     httpd_register_uri_handler(s_server, &uri_ws);
 
     ESP_LOGI(TAG, "HTTP server started");
+    return true;
+}
+
+// Advertise http://gamebox.local over mDNS so phones don't have to type the IP.
+// A fixed "gamebox" hostname is safe: each unit is its own isolated SoftAP, so
+// the per-unit GameBox-XXXX SSID disambiguates units while .local never collides.
+// Best-effort — log and continue on failure so 192.168.4.1 always still works.
+static void mdns_start(void)
+{
+    esp_err_t err = mdns_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "mDNS init failed: %s (use 192.168.4.1)", esp_err_to_name(err));
+        return;
+    }
+    mdns_hostname_set("gamebox");
+    mdns_instance_name_set("GameBox Controller");
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    ESP_LOGI(TAG, "mDNS up: http://gamebox.local");
 }
 
 static void wifi_ap_start_handler(void *arg, esp_event_base_t event_base,
@@ -446,8 +492,14 @@ static void wifi_ap_start_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "SPIFFS mounted");
     }
 
-    start_webserver();
-    xEventGroupSetBits(net_event_group, NETWORK_READY_BIT);
+    if (start_webserver()) {
+        mdns_start();
+        xEventGroupSetBits(net_event_group, NETWORK_READY_BIT);
+    } else {
+        // No HTTP server → no controller. Tell the engine to show a degraded
+        // screen instead of leaving the game task blocked forever.
+        xEventGroupSetBits(net_event_group, NETWORK_FAILED_BIT);
+    }
 }
 
 void network_wifi_init_ap(void)

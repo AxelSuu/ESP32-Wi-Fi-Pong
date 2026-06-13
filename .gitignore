@@ -79,3 +79,7 @@ Desktop.ini
 
 CLAUDE.md
 session.md
+ROADMAP.md
+TEST_PLAN.md
+# host unit-test binaries
+/test/host/*_tests

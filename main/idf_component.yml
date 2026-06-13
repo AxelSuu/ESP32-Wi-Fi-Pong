@@ -1,1 +1,5 @@
-dependencies: {}
+dependencies:
+  # mDNS responder so the controller is reachable at http://gamebox.local
+  # (the 192.168.4.1 IP stays as a fallback). Managed component — pulled by the
+  # IDF component manager on build; the resolved version is pinned in dependencies.lock.
+  espressif/mdns: "^1.2.0"
