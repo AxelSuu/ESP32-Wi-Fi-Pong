@@ -10,7 +10,7 @@ CFLAGS  ?= -std=c11 -Wall -Wextra -O1 -g
 ROOT    := ../..
 MAIN    := $(ROOT)/main
 INCS       := -I$(MAIN) -Imock
-GAME_SRCS  := $(MAIN)/snake.c $(MAIN)/tron.c $(MAIN)/pong.c $(MAIN)/breakout.c $(MAIN)/gfx.c stubs.c test_games.c
+GAME_SRCS  := $(MAIN)/snake.c $(MAIN)/tron.c $(MAIN)/pong.c $(MAIN)/breakout.c $(MAIN)/survivor.c $(MAIN)/gfx.c stubs.c test_games.c
 PROTO_SRCS := $(MAIN)/proto.c test_proto.c
 GFX_SRCS   := $(MAIN)/gfx.c test_gfx.c
 BINS       := game_tests proto_tests gfx_tests
@@ -18,7 +18,7 @@ BINS       := game_tests proto_tests gfx_tests
 all: $(BINS)
 
 game_tests: $(GAME_SRCS) mock.h
-	$(CC) $(CFLAGS) $(INCS) $(GAME_SRCS) -o $@
+	$(CC) $(CFLAGS) $(INCS) $(GAME_SRCS) -lm -o $@
 
 proto_tests: $(PROTO_SRCS)
 	$(CC) $(CFLAGS) $(INCS) $(PROTO_SRCS) -lm -o $@

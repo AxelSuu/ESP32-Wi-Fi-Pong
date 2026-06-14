@@ -5,12 +5,14 @@
 // Build & run:  make -C test/host run
 #include <stdio.h>
 #include "game_module.h"
+#include "menu.h"
 #include "mock.h"
 
 extern const game_module_t SNAKE;
 extern const game_module_t TRON;
 extern const game_module_t PONG;
 extern const game_module_t BREAKOUT;
+extern const game_module_t SURVIVOR;
 
 static int g_fail;
 #define CHECK(cond, msg)                                                                       \
@@ -133,8 +135,53 @@ static void test_breakout_game_over_loses_lives(void)
     CHECK(BREAKOUT.winner() == -1, "single-player breakout reports no winner");
 }
 
+// --- Menu scroll window (pure helper from menu.h) ---
+
+static void test_menu_window(void)
+{
+    printf("menu: scroll window keeps the cursor visible\n");
+    CHECK(menu_window_start(2, 3, 5) == 0, "no scroll when everything fits");
+    CHECK(menu_window_start(0, 6, 5) == 0, "first row → window at top");
+    CHECK(menu_window_start(5, 6, 5) == 1, "last row → window scrolled to show it");
+    int ok = 1;
+    for (int idx = 0; idx < 6; idx++) {
+        int s = menu_window_start(idx, 6, 5);
+        if (idx < s || idx >= s + 5) ok = 0;          // cursor must be inside the window
+        if (s < 0 || s > 6 - 5) ok = 0;               // window must stay in range
+    }
+    CHECK(ok, "cursor stays inside an in-range window for every index");
+}
+
+// --- Survivor (single-stick roguelite; RNG is mocked) ---
+
+static void test_survivor_reset(void)
+{
+    printf("survivor: fresh run starts clean\n");
+    mock_random_reset();
+    SURVIVOR.reset();
+    CHECK(!SURVIVOR.is_over(), "not over at start");
+    CHECK(SURVIVOR.score() == 0, "score starts at 0");
+    CHECK(SURVIVOR.winner() == -1, "single-player: no winner");
+}
+
+static void test_survivor_survival_scores(void)
+{
+    printf("survivor: surviving accrues score over time\n");
+    mock_random_reset();
+    SURVIVOR.reset();
+    for (int i = 0; i < 100; i++) {       // ~3 s; clear any level-up so the sim keeps running
+        send(&SURVIVOR, INPUT_SELECT, 0);
+        SURVIVOR.tick(30);
+    }
+    CHECK(SURVIVOR.score() >= 3, "score reflects ~3 s of survival");
+    CHECK(SURVIVOR.winner() == -1, "still no winner");
+}
+
 int main(void)
 {
+    test_menu_window();
+    test_survivor_reset();
+    test_survivor_survival_scores();
     test_snake_reversal_rejected();
     test_snake_eats_food();
     test_snake_wall_death();

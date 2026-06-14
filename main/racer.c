@@ -142,6 +142,7 @@ const game_module_t RACER = {
     .id          = "racer",
     .title       = "RACER",
     .min_players = 1,
+    .scored      = true,
     .reset       = racer_reset,
     .on_input    = racer_on_input,
     .tick        = racer_tick,

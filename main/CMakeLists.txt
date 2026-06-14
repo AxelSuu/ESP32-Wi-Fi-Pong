@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "fx.c" "gfx.c" "breakout.c" "persist.c" "proto.c" "main.c" "engine.c" "pong.c" "snake.c" "racer.c" "tron.c" "display.c" "network.c"
+    SRCS "fx.c" "gfx.c" "breakout.c" "survivor.c" "persist.c" "proto.c" "main.c" "engine.c" "pong.c" "snake.c" "racer.c" "tron.c" "display.c" "network.c"
     INCLUDE_DIRS "."
     PRIV_REQUIRES
         esp_http_server esp_wifi nvs_flash spiffs app_update

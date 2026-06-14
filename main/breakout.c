@@ -170,6 +170,7 @@ const game_module_t BREAKOUT = {
     .id          = "breakout",
     .title       = "BREAKOUT",
     .min_players = 1,
+    .scored      = true,
     .reset       = breakout_reset,
     .on_input    = breakout_on_input,
     .tick        = breakout_tick,

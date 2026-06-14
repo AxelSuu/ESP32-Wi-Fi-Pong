@@ -23,6 +23,7 @@ your phone turns into the right control surface. No app install required.
 
 | Game  | Players | Controller            | How it plays |
 |-------|---------|-----------------------|--------------|
+| **Survivor** | 1 | Analog joystick      | Single-stick roguelite: weapons auto-fire, survive an escalating swarm, level up to pick upgrades |
 | **Pong**  | 1–2 | Up / Down + Menu     | Classic paddle; vs adaptive AI, or a 2nd phone takes the right paddle; first to 3 |
 | **Snake** | 1 | 4-way arrows           | Eat food, grow, don't bite yourself or the walls |
 | **Racer** | 1 | Tilt (+ Left/Right)    | Top-down dodge-the-traffic; **tilt your phone** to steer |
@@ -30,7 +31,9 @@ your phone turns into the right control surface. No app install required.
 | **Breakout** | 1 | Tilt / Left / Right | Knock out the brick wall; 3 balls; clearing the board wins |
 
 Single-player games end on a crash (your score is your distance/length/bricks) and the **high
-score per game is saved** (NVS) and shown on the game-over screen. Pong is single-player vs AI
+score per game is saved** (NVS), shown on the game-over screen, and listed on a **HIGH SCORES**
+menu entry (with a device-side reset). Left idle on the attract screen, the console drops into a
+**self-playing Pong demo** until someone joins. Pong is single-player vs AI
 until a second phone connects, which takes over the right paddle. Tron needs **two phones
 connected** — selecting it shows a "waiting for players" screen until the second phone joins,
 and a mid-round disconnect awards the round to the remaining rider.
@@ -125,6 +128,7 @@ Small flat JSON over `/ws`. `t` = message type.
 | `back`   | —                          | return to menu / dismiss game-over |
 | `input`  | `ev`: `up`/`down`/`left`/`right`/`primary` | discrete game input |
 | `tilt`   | `g`: float (degrees)       | analog steering (Racer, Breakout) |
+| `move`   | `x`, `y`: float (−1..1)    | analog joystick (Survivor) |
 | `ping`   | `ts`: client epoch-ms      | latency probe; server echoes `pong` |
 | `brightness` | `v`: 0–255, `save`: 0/1 | set OLED contrast (`save:1` on release → NVS) |
 
@@ -190,6 +194,13 @@ The flash uses a **dual-slot OTA partition table** (`ota_0` / `ota_1` / `otadata
 2. On the controller page, tap the **⚙** button (top-right), choose that `.bin`, and tap
    **FLASH**. The phone POSTs it to `/update`; the device streams it into the inactive OTA
    slot, marks it bootable, and reboots into the new image. The controller then reconnects.
+
+> ⚠️ **OTA updates the app only, not the controller page.** `spiffs_image/index.html` lives in
+> the `storage` SPIFFS partition, which OTA does **not** touch. If a firmware change also changes
+> the controller (e.g. a new game's control surface), you must flash over **USB** (`idf.py flash`,
+> which repacks + writes SPIFFS) — otherwise the phone shows the old page (new game in the menu,
+> but its controls missing). The page is served `no-store`, so a USB reflash takes effect on the
+> next load without a manual browser cache-clear.
 
 **Safety:** a corrupt/truncated upload is rejected (`image invalid`) and a `.bin` built from a
 different project is rejected (`wrong firmware (project mismatch)`) — in both cases the running

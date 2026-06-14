@@ -121,6 +121,7 @@ const game_module_t TRON = {
     .id          = "tron",
     .title       = "TRON",
     .min_players = 2,
+    .scored      = false,    // win-based (last rider standing)
     .reset       = tron_reset,
     .on_input    = tron_on_input,
     .tick        = tron_tick,

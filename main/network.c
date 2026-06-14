@@ -297,7 +297,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    input_event_t ev = { .kind = INPUT_NONE, .player = player, .analog = 0 };
+    input_event_t ev = { .kind = INPUT_NONE, .player = player, .analog = 0, .analog2 = 0 };
 
     if (strcmp(t, "nav") == 0) {
         double d = 1;
@@ -311,6 +311,13 @@ static esp_err_t ws_handler(httpd_req_t *req)
     } else if (strcmp(t, "tilt") == 0) {
         double g;
         if (proto_find_num(msg, "g", &g)) { ev.kind = INPUT_TILT; ev.analog = (float)g; }
+    } else if (strcmp(t, "move") == 0) {
+        double x = 0, y = 0;
+        proto_find_num(msg, "x", &x);
+        proto_find_num(msg, "y", &y);
+        ev.kind = INPUT_MOVE;
+        ev.analog  = (float)x;
+        ev.analog2 = (float)y;
     } else if (strcmp(t, "input") == 0) {
         char e[12];
         if (proto_find_str(msg, "ev", e, sizeof e)) {
@@ -329,6 +336,9 @@ static esp_err_t ws_handler(httpd_req_t *req)
 static esp_err_t index_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
+    // The controller ships in the firmware image and changes with it; never let a
+    // phone serve a stale cached copy (e.g. an old page missing a new game's surface).
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     FILE *f = fopen(SPIFFS_BASE_PATH "/index.html", "r");
     if (!f) {
         ESP_LOGE(TAG, "index.html not found");

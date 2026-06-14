@@ -82,6 +82,23 @@
     #tiltbar { flex: 0 0 auto; height: 28px; border: 2px solid var(--cyan); border-radius: 14px; position: relative; box-shadow: inset 0 0 12px rgba(41,240,255,.25); }
     #tiltdot { position: absolute; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--cyan); left: calc(50% - 10px); box-shadow: 0 0 12px var(--cyan); transition: left .05s linear; }
 
+    /* analog joystick (Survivor) */
+    #joypad { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+    #joybase {
+      width: 72vmin; height: 72vmin; max-width: 92vw;   /* always a square → true circle */
+      position: relative; border: 2px solid var(--cyan); border-radius: 50%;
+      box-shadow: inset 0 0 22px rgba(41,240,255,.22); touch-action: none;
+    }
+    #joythumb {
+      position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%;
+      transform: translate(-50%, -50%); pointer-events: none;
+      background: radial-gradient(circle at 40% 35%, #bff6ff, var(--cyan) 45%, #11406a);
+      box-shadow: 0 0 16px var(--cyan);
+    }
+    /* level-up pick row: three evenly-spread, compact buttons (not tall/squished) */
+    .pickrow { display: flex; gap: var(--gap); flex: 0 0 auto; }
+    .pickrow button { flex: 1; min-height: 50px; font-size: 20px; }
+
     .msg { text-align: center; font-size: 24px; font-weight: 800; color: #eaf6ff; margin: auto; text-shadow: 0 0 10px rgba(41,240,255,.5); }
     .sub { text-align: center; font-size: 16px; color: #9fb0cc; margin-top: 6px; }
 
@@ -188,6 +205,23 @@
       <button class="pill warn" onclick="back()">MENU</button>
     </div>
 
+    <!-- SURVIVOR (analog joystick to move; weapons auto-fire; ◀ PICK ▶ chooses upgrades) -->
+    <div class="surface" data-mode="survivor">
+      <div id="joypad">
+        <div id="joybase" ontouchstart="joyStart(event)" ontouchmove="joyMove(event)"
+             ontouchend="joyEnd(event)" onmousedown="joyStart(event)"
+             onmousemove="joyMove(event)" onmouseup="joyEnd(event)">
+          <div id="joythumb"></div>
+        </div>
+      </div>
+      <div class="pickrow">
+        <button class="accent" onclick="nav(-1)">&#9664;</button>
+        <button class="primary" onclick="select()">PICK</button>
+        <button class="accent" onclick="nav(1)">&#9654;</button>
+      </div>
+      <button class="pill warn" onclick="back()">MENU</button>
+    </div>
+
     <!-- TRON -->
     <div class="surface" data-mode="tron">
       <div class="row">
@@ -213,6 +247,12 @@
       </div>
       <button class="primary" onclick="select()">PLAY AGAIN</button>
       <button class="pill warn" onclick="back()">MENU</button>
+    </div>
+
+    <!-- INFO (generic non-game screen, e.g. high scores — content is on the OLED) -->
+    <div class="surface" data-mode="info">
+      <div class="msg" id="infomsg"></div>
+      <button class="pill warn" onclick="back()">BACK</button>
     </div>
   </main>
 
@@ -291,6 +331,39 @@
     function back()    { send({ t: 'back' }); setSurface('menu'); beep(360, 30); }
     function press(ev) { send({ t: 'input', ev: ev }); beep(660, 30); if (navigator.vibrate) navigator.vibrate(12); }
     function sendTilt(g) { send({ t: 'tilt', g: Math.round(g * 100) / 100 }); }
+
+    // --- analog joystick (Survivor): drag → normalized (x, y), throttled ~30 Hz ---
+    let joyActive = false, lastMove = 0;
+    function joyVec(ev) {
+      const r = document.getElementById('joybase').getBoundingClientRect();
+      const t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      let dx = (t.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      let dy = (t.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      const m = Math.hypot(dx, dy);
+      if (m > 1) { dx /= m; dy /= m; }
+      return { dx, dy };
+    }
+    function joyStart(ev) { ev.preventDefault(); joyActive = true; joyMove(ev); }
+    function joyMove(ev) {
+      if (!joyActive) return;
+      ev.preventDefault();
+      const now = Date.now();
+      if (now - lastMove < 33) return;
+      lastMove = now;
+      const v = joyVec(ev);
+      const thumb = document.getElementById('joythumb');
+      thumb.style.left = (50 + v.dx * 40) + '%';
+      thumb.style.top  = (50 + v.dy * 40) + '%';
+      send({ t: 'move', x: Math.round(v.dx * 100) / 100, y: Math.round(v.dy * 100) / 100 });
+    }
+    function joyEnd(ev) {
+      ev.preventDefault();
+      joyActive = false;
+      const thumb = document.getElementById('joythumb');
+      thumb.style.left = '50%';
+      thumb.style.top = '50%';
+      send({ t: 'move', x: 0, y: 0 });
+    }
     function setBrightness(v, save) { send({ t: 'brightness', v: Number(v), save: save ? 1 : 0 }); }
 
     // --- menu mirror: draw the live game list with the highlighted row ---
@@ -349,8 +422,13 @@
           lastPing = Math.max(0, Date.now() - m.ts); updateFooter();
           break;
         case 'screen':
-          renderMenu(m.games, m.idx);
-          setSurface('menu');
+          if (m.mode === 'info') {
+            document.getElementById('infomsg').textContent = m.text || '';
+            setSurface('info');
+          } else {
+            renderMenu(m.games, m.idx);
+            setSurface('menu');
+          }
           break;
         case 'active':  setSurface(m.game); break;
         case 'waiting':

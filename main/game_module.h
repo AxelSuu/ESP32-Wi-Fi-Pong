@@ -10,6 +10,7 @@ typedef enum {
     INPUT_UP, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT,
     INPUT_PRIMARY,   // single action button
     INPUT_TILT,      // analog steering, value in ev.analog (degrees)
+    INPUT_MOVE,      // 2-axis analog stick: ev.analog = x, ev.analog2 = y (each -1..1)
     INPUT_SELECT,    // menu: choose / launch
     INPUT_NAV,       // menu: move highlight (ev.analog sign, or LEFT/RIGHT)
     INPUT_BACK       // return to menu / dismiss game-over
@@ -18,7 +19,8 @@ typedef enum {
 typedef struct {
     input_kind_t kind;
     int          player;   // 0 or 1 (slot id from the network layer)
-    float        analog;   // for INPUT_TILT / INPUT_NAV, else 0
+    float        analog;   // INPUT_TILT/INPUT_NAV value, or INPUT_MOVE x-axis
+    float        analog2;  // INPUT_MOVE y-axis, else 0
 } input_event_t;
 
 // One game = one vtable. Each game keeps its own mutable state file-static in
@@ -28,6 +30,7 @@ typedef struct {
     const char *id;            // stable wire id: "pong","snake","racer","tron"
     const char *title;         // menu label
     uint8_t     min_players;   // 1 or 2
+    bool        scored;        // true = has a numeric high score (false = win-based)
 
     void (*reset)(void);                       // start a fresh round
     void (*on_input)(const input_event_t *ev); // handle one input event

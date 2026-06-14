@@ -132,6 +132,7 @@ const game_module_t SNAKE = {
     .id          = "snake",
     .title       = "SNAKE",
     .min_players = 1,
+    .scored      = true,
     .reset       = snake_reset,
     .on_input    = snake_on_input,
     .tick        = snake_tick,

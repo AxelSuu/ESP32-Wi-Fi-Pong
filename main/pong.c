@@ -35,6 +35,9 @@ static ball_t   s_ball;
 static int      s_player_score;
 static int      s_enemy_score;
 static bool     s_p1_joined;     // a 2nd phone took the right paddle → AI off
+static bool     s_demo;          // attract demo: AI plays both paddles
+
+void pong_set_demo(bool on) { s_demo = on; }
 
 static int64_t  s_last_speed_increase;
 static int64_t  s_last_ai_update;
@@ -198,6 +201,13 @@ static void pong_tick(uint32_t dt_ms)
         }
     }
 
+    // Attract demo: the AI also drives the left paddle so Pong plays itself.
+    if (s_demo && s_ball.dx < 0) {
+        int center = s_player.y + s_player.h / 2;
+        if (s_ball.y < center - 3)      s_player.y -= AI_MOVE_SPEED;
+        else if (s_ball.y > center + 3) s_player.y += AI_MOVE_SPEED;
+    }
+
     // Clamp paddles
     if (s_enemy.y < 0)                                s_enemy.y = 0;
     if (s_enemy.y + s_enemy.h > SCREEN_HEIGHT)        s_enemy.y = SCREEN_HEIGHT - s_enemy.h;
@@ -226,6 +236,7 @@ const game_module_t PONG = {
     .id          = "pong",
     .title       = "PONG",
     .min_players = 1,
+    .scored      = false,    // win-based (first to 3)
     .reset       = pong_reset,
     .on_input    = pong_on_input,
     .tick        = pong_tick,
