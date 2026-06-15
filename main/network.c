@@ -191,10 +191,10 @@ void net_broadcast_json(const char *json)
     ws_broadcast(json);
 }
 
-void net_broadcast_active(const char *game_id, int players)
+void net_broadcast_active(const char *game_id, int players, const char *controls)
 {
-    char buf[64];
-    proto_fmt_active(buf, sizeof buf, game_id, players);
+    char buf[256];
+    proto_fmt_active(buf, sizeof buf, game_id, players, controls);
     ws_broadcast(buf);
 }
 

@@ -237,6 +237,8 @@ const game_module_t PONG = {
     .title       = "PONG",
     .min_players = 1,
     .scored      = false,    // win-based (first to 3)
+    .controls    = "[{\"w\":\"btn\",\"label\":\"&#9650; UP\",\"ev\":\"up\"},"
+                   "{\"w\":\"btn\",\"label\":\"&#9660; DOWN\",\"ev\":\"down\"}]",
     .reset       = pong_reset,
     .on_input    = pong_on_input,
     .tick        = pong_tick,

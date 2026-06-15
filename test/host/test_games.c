@@ -8,11 +8,11 @@
 #include "menu.h"
 #include "mock.h"
 
-extern const game_module_t SNAKE;
-extern const game_module_t TRON;
 extern const game_module_t PONG;
-extern const game_module_t BREAKOUT;
 extern const game_module_t SURVIVOR;
+extern const game_module_t DESCENDER;
+extern const game_module_t PUZZLER;
+extern const game_module_t RUNNER;
 
 static int g_fail;
 #define CHECK(cond, msg)                                                                       \
@@ -29,66 +29,6 @@ static void send(const game_module_t *g, input_kind_t kind, int player)
 {
     input_event_t ev = {.kind = kind, .player = player, .analog = 0};
     g->on_input(&ev);
-}
-
-// --- Snake (STEP_MS = 140 → one tick(140) == one simulation step) ---
-
-static void test_snake_reversal_rejected(void)
-{
-    printf("snake: a 180-degree reversal is rejected\n");
-    mock_random_reset();
-    mock_random_push(0);
-    mock_random_push(0); // food at (0,0), out of the path
-    SNAKE.reset();
-    send(&SNAKE, INPUT_LEFT, 0); // reverse straight into the neck
-    SNAKE.tick(140);
-    CHECK(!SNAKE.is_over(), "snake keeps heading right instead of dying on its neck");
-    CHECK(SNAKE.score() == 0, "rejected reversal causes no growth");
-}
-
-static void test_snake_eats_food(void)
-{
-    printf("snake: eating food grows the snake and scores\n");
-    mock_random_reset();
-    mock_random_push(11);
-    mock_random_push(8); // food one cell ahead of the head
-    SNAKE.reset();
-    SNAKE.tick(140);
-    CHECK(SNAKE.score() == 1, "score increments after eating");
-    CHECK(!SNAKE.is_over(), "eating does not end the round");
-}
-
-static void test_snake_wall_death(void)
-{
-    printf("snake: running off the edge ends the round\n");
-    mock_random_reset();
-    mock_random_push(0);
-    mock_random_push(0);
-    SNAKE.reset();
-    for (int i = 0; i < 11; i++) SNAKE.tick(140); // x: 10 -> 21 (past the right wall)
-    CHECK(SNAKE.is_over(), "game over after hitting the wall");
-    CHECK(SNAKE.winner() == -1, "single-player snake reports no winner");
-}
-
-// --- Tron (STEP_MS = 90, no RNG/clock dependence) ---
-
-static void test_tron_head_on_double_kill(void)
-{
-    printf("tron: a head-on into the same cell kills both (draw)\n");
-    TRON.reset();                              // p0 and p1 start facing each other
-    for (int i = 0; i < 8; i++) TRON.tick(90); // close the gap until they collide
-    CHECK(TRON.is_over(), "round ends on the head-on");
-    CHECK(TRON.winner() == -1, "head-on is a draw (winner -1)");
-}
-
-static void test_tron_crash_hands_win_to_survivor(void)
-{
-    printf("tron: crashing into the wall hands the other player the win\n");
-    TRON.reset();
-    send(&TRON, INPUT_LEFT, 0);                 // p0 turns up, toward the top edge
-    for (int i = 0; i < 13; i++) TRON.tick(90); // p0 runs off the top; p1 survives
-    CHECK(TRON.is_over(), "round ends when p0 crashes");
-    CHECK(TRON.winner() == 1, "surviving player 1 wins");
 }
 
 // --- Pong (drives to completion; AI vs a stationary player) ---
@@ -109,30 +49,6 @@ static void test_pong_reaches_a_valid_winner(void)
     CHECK(PONG.is_over(), "pong ends within the tick budget");
     int w = PONG.winner();
     CHECK(w == 0 || w == 1, "winner is a valid player id");
-}
-
-// --- Breakout (one tick == one ball step; ball starts up-right from the paddle) ---
-
-static void test_breakout_breaks_a_brick(void)
-{
-    printf("breakout: the ball clears a brick and scores\n");
-    BREAKOUT.reset();
-    for (int i = 0; i < 30; i++) BREAKOUT.tick(30);   // ball climbs into the brick rows
-    CHECK(BREAKOUT.score() >= 1, "score increased after hitting a brick");
-    CHECK(!BREAKOUT.is_over(), "breaking a brick does not end the game");
-}
-
-static void test_breakout_game_over_loses_lives(void)
-{
-    printf("breakout: missing the ball eventually ends the game\n");
-    BREAKOUT.reset();                                  // paddle never moves -> lives run out
-    int ticks = 0;
-    while (!BREAKOUT.is_over() && ticks < 20000) {
-        BREAKOUT.tick(30);
-        ticks++;
-    }
-    CHECK(BREAKOUT.is_over(), "game ends within the tick budget");
-    CHECK(BREAKOUT.winner() == -1, "single-player breakout reports no winner");
 }
 
 // --- Menu scroll window (pure helper from menu.h) ---
@@ -177,19 +93,132 @@ static void test_survivor_survival_scores(void)
     CHECK(SURVIVOR.winner() == -1, "still no winner");
 }
 
+// --- Descender (Downwell-like faller; RNG mocked, deterministic LCG fallback) ---
+
+static void test_descender_reset(void)
+{
+    printf("descender: fresh run starts clean\n");
+    mock_random_reset();
+    DESCENDER.reset();
+    CHECK(!DESCENDER.is_over(), "not over at start");
+    CHECK(DESCENDER.score() == 0, "score starts at 0");
+    CHECK(DESCENDER.winner() == -1, "single-player: no winner");
+}
+
+static void test_descender_descent_scores(void)
+{
+    printf("descender: falling accrues depth score\n");
+    mock_random_reset();
+    DESCENDER.reset();
+    for (int i = 0; i < 30; i++) DESCENDER.tick(30);   // ~0.9 s of falling, no input
+    CHECK(DESCENDER.score() >= 1, "depth contributes score while falling");
+    CHECK(!DESCENDER.is_over(), "still alive after a short fall");
+}
+
+static void test_descender_attrition_ends(void)
+{
+    printf("descender: passive play eventually ends the run\n");
+    mock_random_reset();
+    DESCENDER.reset();
+    int ticks = 0;
+    while (!DESCENDER.is_over() && ticks < 20000) {
+        send(&DESCENDER, INPUT_SELECT, 0);   // clear any upgrade pick so the sim keeps running
+        DESCENDER.tick(30);
+        ticks++;
+    }
+    CHECK(DESCENDER.is_over(), "run ends within the tick budget (spiky enemies damage a passive player)");
+    CHECK(DESCENDER.winner() == -1, "single-player: no winner");
+}
+
+// --- Puzzler (Tetris-like; 7-bag RNG mocked, deterministic LCG fallback) ---
+
+static void test_puzzler_reset(void)
+{
+    printf("puzzler: fresh game starts clean\n");
+    mock_random_reset();
+    PUZZLER.reset();
+    CHECK(!PUZZLER.is_over(), "not over at start");
+    CHECK(PUZZLER.score() == 0, "score starts at 0");
+    CHECK(PUZZLER.winner() == -1, "single-player: no winner");
+}
+
+static void test_puzzler_soft_drop_scores(void)
+{
+    printf("puzzler: soft drop adds score per cell\n");
+    mock_random_reset();
+    PUZZLER.reset();
+    for (int i = 0; i < 5; i++) send(&PUZZLER, INPUT_DOWN, 0);
+    CHECK(PUZZLER.score() >= 5, "five soft-drop steps scored");
+    CHECK(!PUZZLER.is_over(), "still going");
+}
+
+static void test_puzzler_tops_out(void)
+{
+    printf("puzzler: stacking to the top ends the game\n");
+    mock_random_reset();
+    PUZZLER.reset();
+    int n = 0;
+    while (!PUZZLER.is_over() && n < 5000) {
+        send(&PUZZLER, INPUT_PRIMARY, 0);   // hard drop, no horizontal moves -> columns 2-5 stack up
+        PUZZLER.tick(30);
+        n++;
+    }
+    CHECK(PUZZLER.is_over(), "game tops out within budget");
+    CHECK(PUZZLER.winner() == -1, "single-player: no winner");
+}
+
+// --- Runner (top-down endless dodger; RNG mocked, deterministic LCG fallback) ---
+
+static void test_runner_reset(void)
+{
+    printf("runner: fresh run starts clean\n");
+    mock_random_reset();
+    RUNNER.reset();
+    CHECK(!RUNNER.is_over(), "not over at start");
+    CHECK(RUNNER.score() == 0, "score starts at 0");
+    CHECK(RUNNER.winner() == -1, "single-player: no winner");
+}
+
+static void test_runner_distance_scores(void)
+{
+    printf("runner: travelling accrues distance score\n");
+    mock_random_reset();
+    RUNNER.reset();
+    for (int i = 0; i < 20; i++) RUNNER.tick(30);   // before the first obstacle can reach the car
+    CHECK(RUNNER.score() >= 1, "distance contributes score");
+    CHECK(!RUNNER.is_over(), "still alive after a short run");
+}
+
+static void test_runner_crash_ends(void)
+{
+    printf("runner: a stationary car eventually crashes\n");
+    mock_random_reset();
+    RUNNER.reset();
+    int ticks = 0;
+    while (!RUNNER.is_over() && ticks < 20000) {
+        send(&RUNNER, INPUT_SELECT, 0);   // clear any perk pick so the sim keeps running
+        RUNNER.tick(30);
+        ticks++;
+    }
+    CHECK(RUNNER.is_over(), "run ends within the tick budget (an aligned rock with no shield)");
+    CHECK(RUNNER.winner() == -1, "single-player: no winner");
+}
+
 int main(void)
 {
     test_menu_window();
     test_survivor_reset();
     test_survivor_survival_scores();
-    test_snake_reversal_rejected();
-    test_snake_eats_food();
-    test_snake_wall_death();
-    test_tron_head_on_double_kill();
-    test_tron_crash_hands_win_to_survivor();
+    test_descender_reset();
+    test_descender_descent_scores();
+    test_descender_attrition_ends();
+    test_puzzler_reset();
+    test_puzzler_soft_drop_scores();
+    test_puzzler_tops_out();
+    test_runner_reset();
+    test_runner_distance_scores();
+    test_runner_crash_ends();
     test_pong_reaches_a_valid_winner();
-    test_breakout_breaks_a_brick();
-    test_breakout_game_over_loses_lives();
 
     printf("\n%s (%d failure%s)\n", g_fail ? "TESTS FAILED" : "ALL TESTS PASSED", g_fail,
            g_fail == 1 ? "" : "s");

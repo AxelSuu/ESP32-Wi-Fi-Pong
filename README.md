@@ -24,19 +24,17 @@ your phone turns into the right control surface. No app install required.
 | Game  | Players | Controller            | How it plays |
 |-------|---------|-----------------------|--------------|
 | **Survivor** | 1 | Analog joystick      | Single-stick roguelite: weapons auto-fire, survive an escalating swarm, level up to pick upgrades |
+| **Descender** | 1 | Tilt / ◀▶ + FIRE   | Downwell-like faller: drop an endless well, shoot downward to brake and kill, stomp enemies, chain combos, pick gun upgrades each depth |
+| **Blocks** | 1 | ◀▶ + ROTATE + DROP | Tetris-like: stack falling tetrominoes, clear lines for points, speed ramps with level; tops out when the well fills |
+| **Runner** | 1 | Tilt / ◀▶          | Top-down endless dodger: weave through traffic, grab coins/shields/slow-mo, bank near-miss bonuses, pick a perk each stretch; one crash ends the run |
 | **Pong**  | 1–2 | Up / Down + Menu     | Classic paddle; vs adaptive AI, or a 2nd phone takes the right paddle; first to 3 |
-| **Snake** | 1 | 4-way arrows           | Eat food, grow, don't bite yourself or the walls |
-| **Racer** | 1 | Tilt (+ Left/Right)    | Top-down dodge-the-traffic; **tilt your phone** to steer |
-| **Tron**  | 2 | Left / Right turns     | Two light-cycles, two trail shades; last one riding wins |
-| **Breakout** | 1 | Tilt / Left / Right | Knock out the brick wall; 3 balls; clearing the board wins |
 
-Single-player games end on a crash (your score is your distance/length/bricks) and the **high
+Single-player games (Survivor, Descender, Blocks, Runner) end on a run-ending mistake and the **high
 score per game is saved** (NVS), shown on the game-over screen, and listed on a **HIGH SCORES**
 menu entry (with a device-side reset). Left idle on the attract screen, the console drops into a
 **self-playing Pong demo** until someone joins. Pong is single-player vs AI
-until a second phone connects, which takes over the right paddle. Tron needs **two phones
-connected** — selecting it shows a "waiting for players" screen until the second phone joins,
-and a mid-round disconnect awards the round to the remaining rider.
+until a second phone connects, which takes over the right paddle (a mid-round disconnect drops it
+back to AI).
 
 The controller also shows **round-trip latency** in its footer, plays WebAudio blips, has a
 reconnect toast, and a **brightness** slider in the ⚙ menu (saved to NVS). Your last-played
@@ -89,7 +87,7 @@ Pins live in [`main/hw_config.h`](main/hw_config.h).
                  └───────┬───────────────────────────┬────────────┘
                          │ game_module_t vtable        │ gfx_* primitives
         ┌────────────────┴────────────┐        ┌───────┴───────────────┐
-        │ pong/snake/racer/tron/breakout│ draws │   display.c (gfx_*)    │
+        │ the per-game vtable modules   │ draws │   display.c (gfx_*)    │
         │ each owns its state file-     │ ─────► │  SSD1327 driver + FB   │
         │ static; no global game struct │        │  (no game knowledge)   │
         └────────────────▲─────────────┘        └────────────────────────┘
@@ -127,7 +125,7 @@ Small flat JSON over `/ws`. `t` = message type.
 | `select` | —                          | launch highlighted game / play again |
 | `back`   | —                          | return to menu / dismiss game-over |
 | `input`  | `ev`: `up`/`down`/`left`/`right`/`primary` | discrete game input |
-| `tilt`   | `g`: float (degrees)       | analog steering (Racer, Breakout) |
+| `tilt`   | `g`: float (degrees)       | analog steering (Descender, Runner) |
 | `move`   | `x`, `y`: float (−1..1)    | analog joystick (Survivor) |
 | `ping`   | `ts`: client epoch-ms      | latency probe; server echoes `pong` |
 | `brightness` | `v`: 0–255, `save`: 0/1 | set OLED contrast (`save:1` on release → NVS) |
@@ -151,7 +149,7 @@ it doesn't understand. Clients ignore unknown fields, so additive changes don't 
 The `active` message drives the controller morph — the phone JS swaps its control surface
 based on `game`. The `screen` message mirrors the on-device menu so the phone shows the live
 game list with the highlighted entry (instead of blind Up/Down). On `over`, single-player
-games (Snake/Racer) report a `score` and the phone shows `Score: n`. The web controller keeps
+games (Survivor/Descender/Blocks/Runner) report a `score` and the phone shows `Score: n`. The web controller keeps
 an exponential-backoff reconnect and buzzes (`navigator.vibrate`) on input and round end.
 
 
@@ -174,7 +172,7 @@ partition automatically during the build.
 
 On-hardware acceptance is the manual matrix in [`TEST_PLAN.md`](TEST_PLAN.md). The pure-C
 logic also has **host unit tests** that need no ESP32 — they exercise
-`snake/tron/pong/breakout` against a stubbed `display.h`, plus the WS wire protocol
+`survivor/descender/pong` against a stubbed `display.h`, plus the WS wire protocol
 (`proto.c`: JSON parser + message formatters):
 
 ```bash
@@ -212,7 +210,7 @@ firmware runs healthily for a few seconds; an image that hangs or crashes before
 
 ## Tilt on iOS
 
-iOS Safari requires a user gesture before granting motion access. On the Racer screen tap
+iOS Safari requires a user gesture before granting motion access. On a tilt game's screen (Descender/Runner) tap
 **"ENABLE TILT"** once — it calls `DeviceOrientationEvent.requestPermission()` and then
 streams throttled (~25 Hz) `tilt` messages. On Android / desktop tilt arms immediately; the
 Left/Right buttons always work as a fallback.

@@ -27,10 +27,11 @@ typedef struct {
 // its own .c. reset/on_input/tick run under the engine mutex; render may run
 // unlocked (one torn frame is acceptable).
 typedef struct {
-    const char *id;            // stable wire id: "pong","snake","racer","tron"
+    const char *id;            // stable wire id: "survivor","descender","pong","runner"
     const char *title;         // menu label
     uint8_t     min_players;   // 1 or 2
     bool        scored;        // true = has a numeric high score (false = win-based)
+    const char *controls;      // JSON-array control descriptor for the phone (see proto)
 
     void (*reset)(void);                       // start a fresh round
     void (*on_input)(const input_event_t *ev); // handle one input event

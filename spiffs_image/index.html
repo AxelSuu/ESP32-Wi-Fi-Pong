@@ -99,6 +99,14 @@
     .pickrow { display: flex; gap: var(--gap); flex: 0 0 auto; }
     .pickrow button { flex: 1; min-height: 50px; font-size: 20px; }
 
+    /* generic controller host + widgets */
+    #gamectl { flex: 1; display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
+    .tiltwrap { display: flex; flex-direction: column; gap: var(--gap); }
+    .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); flex: 0 0 auto; }
+    .dpad .dcell { display: flex; }
+    .dpad .dcell button { flex: 1; min-height: 56px; }
+    .gamebtn { flex: 1; min-height: 56px; font-size: 22px; }
+
     .msg { text-align: center; font-size: 24px; font-weight: 800; color: #eaf6ff; margin: auto; text-shadow: 0 0 10px rgba(41,240,255,.5); }
     .sub { text-align: center; font-size: 16px; color: #9fb0cc; margin-top: 6px; }
 
@@ -166,68 +174,9 @@
       <button class="primary" onclick="select()">SELECT</button>
     </div>
 
-    <!-- PONG -->
-    <div class="surface" data-mode="pong">
-      <button class="accent" onclick="press('up')">&#9650; UP</button>
-      <button class="accent" onclick="press('down')">&#9660; DOWN</button>
-      <button class="pill warn" onclick="back()">MENU</button>
-    </div>
-
-    <!-- SNAKE -->
-    <div class="surface" data-mode="snake">
-      <div class="row"><button class="accent" onclick="press('up')">&#9650;</button></div>
-      <div class="row">
-        <button class="accent" onclick="press('left')">&#9664;</button>
-        <button class="accent" onclick="press('right')">&#9654;</button>
-      </div>
-      <div class="row"><button class="accent" onclick="press('down')">&#9660;</button></div>
-      <button class="pill warn" onclick="back()">MENU</button>
-    </div>
-
-    <!-- RACER -->
-    <div class="surface" data-mode="racer">
-      <div id="tiltbar"><div id="tiltdot"></div></div>
-      <button class="primary tilt-toggle" onclick="enableTilt()">ENABLE TILT</button>
-      <div class="row">
-        <button class="accent" onclick="press('left')">&#9664;</button>
-        <button class="accent" onclick="press('right')">&#9654;</button>
-      </div>
-      <button class="pill warn" onclick="back()">MENU</button>
-    </div>
-
-    <!-- BREAKOUT -->
-    <div class="surface" data-mode="breakout">
-      <button class="primary tilt-toggle" onclick="enableTilt()">ENABLE TILT</button>
-      <div class="row">
-        <button class="accent" onclick="press('left')">&#9664;</button>
-        <button class="accent" onclick="press('right')">&#9654;</button>
-      </div>
-      <button class="pill warn" onclick="back()">MENU</button>
-    </div>
-
-    <!-- SURVIVOR (analog joystick to move; weapons auto-fire; ◀ PICK ▶ chooses upgrades) -->
-    <div class="surface" data-mode="survivor">
-      <div id="joypad">
-        <div id="joybase" ontouchstart="joyStart(event)" ontouchmove="joyMove(event)"
-             ontouchend="joyEnd(event)" onmousedown="joyStart(event)"
-             onmousemove="joyMove(event)" onmouseup="joyEnd(event)">
-          <div id="joythumb"></div>
-        </div>
-      </div>
-      <div class="pickrow">
-        <button class="accent" onclick="nav(-1)">&#9664;</button>
-        <button class="primary" onclick="select()">PICK</button>
-        <button class="accent" onclick="nav(1)">&#9654;</button>
-      </div>
-      <button class="pill warn" onclick="back()">MENU</button>
-    </div>
-
-    <!-- TRON -->
-    <div class="surface" data-mode="tron">
-      <div class="row">
-        <button class="accent" onclick="press('left')">&#8634; LEFT</button>
-        <button class="accent" onclick="press('right')">RIGHT &#8635;</button>
-      </div>
+    <!-- GAME (controls built dynamically from the active message's `controls` descriptor) -->
+    <div class="surface" data-mode="game">
+      <div id="gamectl"></div>
       <button class="pill warn" onclick="back()">MENU</button>
     </div>
 
@@ -381,16 +330,98 @@
       });
     }
 
+    // --- generic controller: build the active game's surface from its descriptor ---
+    function renderControls(spec) {
+      const host = document.getElementById('gamectl');
+      host.innerHTML = '';
+      let widgets = [];
+      try { widgets = Array.isArray(spec) ? spec : JSON.parse(spec); } catch (e) { widgets = []; }
+      widgets.forEach(w => {
+        if (w.w === 'joystick')   host.appendChild(buildJoystick());
+        else if (w.w === 'tilt')  host.appendChild(buildTilt());
+        else if (w.w === 'dpad')  host.appendChild(buildDpad(w.dirs || []));
+        else if (w.w === 'btn')   host.appendChild(buildButton(w.label || '?', w.ev || 'primary'));
+        else if (w.w === 'pick')  host.appendChild(buildPick());
+      });
+    }
+
+    function buildJoystick() {
+      const pad = document.createElement('div'); pad.id = 'joypad';
+      const base = document.createElement('div'); base.id = 'joybase';
+      const thumb = document.createElement('div'); thumb.id = 'joythumb';
+      base.appendChild(thumb);
+      base.addEventListener('touchstart', joyStart, { passive: false });
+      base.addEventListener('touchmove',  joyMove,  { passive: false });
+      base.addEventListener('touchend',   joyEnd,   { passive: false });
+      base.addEventListener('mousedown',  joyStart);
+      base.addEventListener('mousemove',  joyMove);
+      base.addEventListener('mouseup',    joyEnd);
+      pad.appendChild(base);
+      return pad;
+    }
+
+    function buildTilt() {
+      const wrap = document.createElement('div'); wrap.className = 'tiltwrap';
+      const bar = document.createElement('div'); bar.id = 'tiltbar';
+      const dot = document.createElement('div'); dot.id = 'tiltdot';
+      bar.appendChild(dot);
+      const btn = document.createElement('button');
+      btn.className = 'primary tilt-toggle';
+      btn.textContent = tiltArmed ? 'TILT ON' : 'ENABLE TILT';
+      btn.onclick = enableTilt;
+      wrap.appendChild(bar); wrap.appendChild(btn);
+      return wrap;
+    }
+
+    function buildDpad(dirs) {
+      const glyph = { up: '&#9650;', down: '&#9660;', left: '&#9664;', right: '&#9654;' };
+      const has = d => dirs.indexOf(d) >= 0;
+      const pad = document.createElement('div'); pad.className = 'dpad';
+      // 3x3 grid: up top-center, left/right middle, down bottom-center; empty cells stay blank
+      [null, 'up', null, 'left', null, 'right', null, 'down', null].forEach(d => {
+        const cell = document.createElement('div'); cell.className = 'dcell';
+        if (d && has(d)) {
+          const b = document.createElement('button'); b.className = 'accent';
+          b.innerHTML = glyph[d]; b.onclick = () => press(d);
+          cell.appendChild(b);
+        }
+        pad.appendChild(cell);
+      });
+      return pad;
+    }
+
+    function buildButton(label, ev) {
+      const b = document.createElement('button'); b.className = 'accent gamebtn';
+      b.innerHTML = label; b.onclick = () => press(ev);
+      return b;
+    }
+
+    function buildPick() {
+      const row = document.createElement('div'); row.className = 'pickrow';
+      const mk = (cls, html, fn) => {
+        const b = document.createElement('button'); b.className = cls; b.innerHTML = html;
+        b.onclick = fn; return b;
+      };
+      row.appendChild(mk('accent',  '&#9664;', () => nav(-1)));
+      row.appendChild(mk('primary', 'PICK',    () => select()));
+      row.appendChild(mk('accent',  '&#9654;', () => nav(1)));
+      return row;
+    }
+
     // --- tilt (DeviceOrientation) ---
     let tiltArmed = false, lastTilt = 0;
     function onOrient(e) {
       const now = Date.now();
       if (now - lastTilt < 40) return;        // ~25 Hz throttle
       lastTilt = now;
+      // The tilt widget is only present on tilt games (the generic renderer
+      // removes it otherwise); stay quiet — and don't send tilt — when it's gone.
+      const dot = document.getElementById('tiltdot');
+      if (!dot) return;
       const g = e.gamma || 0;                  // left/right tilt in degrees
       sendTilt(g);
       const pct = Math.max(-1, Math.min(1, g / 45));
-      document.getElementById('tiltdot').style.left = (50 + pct * 45) + '%';
+      dot.style.left = (50 + pct * 45) + '%';
     }
     function armTilt() {
       if (tiltArmed) return;
@@ -430,7 +461,7 @@
             setSurface('menu');
           }
           break;
-        case 'active':  setSurface(m.game); break;
+        case 'active':  renderControls(m.controls); setSurface('game'); break;
         case 'waiting':
           document.getElementById('waitmsg').textContent =
             'WAITING ' + m.have + '/' + m.need;

@@ -66,8 +66,9 @@ static void test_formatters(void)
     proto_fmt_system_info(b, sizeof b, "1.0-abc");
     CHECK(strcmp(b, "{\"v\":1,\"t\":\"system_info\",\"version\":\"1.0-abc\"}") == 0, "system_info");
 
-    proto_fmt_active(b, sizeof b, "pong", 1);
-    CHECK(strcmp(b, "{\"v\":1,\"t\":\"active\",\"game\":\"pong\",\"players\":1}") == 0, "active");
+    proto_fmt_active(b, sizeof b, "pong", 1, "[{\"w\":\"btn\"}]");
+    CHECK(strcmp(b, "{\"v\":1,\"t\":\"active\",\"game\":\"pong\",\"players\":1,"
+                    "\"controls\":[{\"w\":\"btn\"}]}") == 0, "active");
 
     proto_fmt_waiting(b, sizeof b, 2, 1);
     CHECK(strcmp(b, "{\"v\":1,\"t\":\"waiting\",\"need\":2,\"have\":1}") == 0, "waiting");
@@ -84,7 +85,9 @@ static void test_schema_version(void)
     printf("proto: every server message carries the schema version\n");
     char   b[96];
     double v = 0;
-    proto_fmt_active(b, sizeof b, "tron", 2);
+    proto_fmt_active(b, sizeof b, "pong", 2, "[{\"w\":\"pick\"}]");
+    CHECK(strcmp(b, "{\"v\":1,\"t\":\"active\",\"game\":\"pong\",\"players\":2,"
+                    "\"controls\":[{\"w\":\"pick\"}]}") == 0, "active 2p");
     CHECK(proto_find_num(b, "v", &v) && v == (double)PROTO_SCHEMA_VERSION,
           "v field equals PROTO_SCHEMA_VERSION");
 }

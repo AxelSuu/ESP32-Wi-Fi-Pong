@@ -4,11 +4,10 @@
 #include "net_config.h"
 #include "network.h"
 #include "pong.h"
-#include "snake.h"
-#include "racer.h"
-#include "tron.h"
-#include "breakout.h"
 #include "survivor.h"
+#include "descender.h"
+#include "puzzler.h"
+#include "runner.h"
 #include "persist.h"
 #include "icons.h"
 #include "proto.h"
@@ -23,7 +22,7 @@
 typedef enum { APP_MENU, APP_PLAYING, APP_GAMEOVER, APP_SCORES, APP_DEMO } app_state_t;
 
 // Game registry — order is the menu order.
-static const game_module_t *const s_games[] = { &SURVIVOR, &PONG, &SNAKE, &RACER, &TRON, &BREAKOUT };
+static const game_module_t *const s_games[] = { &SURVIVOR, &DESCENDER, &PUZZLER, &RUNNER, &PONG };
 #define N_GAMES ((int)(sizeof(s_games) / sizeof(s_games[0])))
 
 // The menu lists the games plus trailing system entries; HIGH SCORES is the last.
@@ -98,7 +97,7 @@ static void try_launch(const game_module_t *g)
     s_active  = g;
     s_active->reset();
     s_app     = APP_PLAYING;
-    net_broadcast_active(g->id, g->min_players);
+    net_broadcast_active(g->id, g->min_players, g->controls);
 }
 
 // Mirror the menu to connected phones (the "screen" message). Mutex held. The
@@ -262,7 +261,7 @@ void engine_on_player_connect(int player)
     } else if (s_app == APP_MENU) {
         broadcast_menu_state();                  // let the new phone draw the menu
     } else if (s_app == APP_PLAYING && s_active) {
-        net_broadcast_active(s_active->id, s_active->min_players);  // re-morph
+        net_broadcast_active(s_active->id, s_active->min_players, s_active->controls);  // re-morph
     } else if (s_app == APP_GAMEOVER) {
         net_broadcast_over(s_last_winner, s_last_score);
     }

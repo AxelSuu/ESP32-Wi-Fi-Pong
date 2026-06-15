@@ -55,10 +55,15 @@ int proto_fmt_system_info(char *buf, size_t cap, const char *version)
                     PROTO_SCHEMA_VERSION, version);
 }
 
-int proto_fmt_active(char *buf, size_t cap, const char *game_id, int players)
+int proto_fmt_active(char *buf, size_t cap, const char *game_id, int players,
+                     const char *controls)
 {
-    return snprintf(buf, cap, "{\"v\":%d,\"t\":\"active\",\"game\":\"%s\",\"players\":%d}",
-                    PROTO_SCHEMA_VERSION, game_id, players);
+    // `controls` is a trusted JSON-array literal owned by the game module; it is
+    // embedded raw (not quoted) so the client can parse it as the widget stack.
+    return snprintf(buf, cap,
+                    "{\"v\":%d,\"t\":\"active\",\"game\":\"%s\",\"players\":%d,"
+                    "\"controls\":%s}",
+                    PROTO_SCHEMA_VERSION, game_id, players, controls);
 }
 
 int proto_fmt_waiting(char *buf, size_t cap, int need, int have)

@@ -27,7 +27,7 @@ static void write_i32(const char *key, int value)
     nvs_close(h);
 }
 
-// NVS keys are capped at 15 chars; "hs_breakout" (11) is the longest we form.
+// NVS keys are capped at 15 chars; "hs_descender" (12) is the longest we form.
 static void hs_key(char *out, size_t n, const char *game_id)
 {
     snprintf(out, n, "hs_%s", game_id);

@@ -330,6 +330,7 @@ const game_module_t SURVIVOR = {
     .title       = "SURVIVOR",
     .min_players = 1,
     .scored      = true,
+    .controls    = "[{\"w\":\"joystick\"},{\"w\":\"pick\"}]",
     .reset       = survivor_reset,
     .on_input    = survivor_on_input,
     .tick        = survivor_tick,
